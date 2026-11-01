@@ -65,6 +65,8 @@ and `python scripts/dev.py lint`, on Ubuntu and Windows, Python 3.12.
 - `workpull/` — the CLI package.
 - `tests/` — unittest, one file per requirement.
 - `adapters/` — mock hooks for tests.
+- `plugins/` — canned, shipped adapters. `plugins/github/`
+  is the GitHub issues adapter, describe only for now.
 
 ## Workflow
 
