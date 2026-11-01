@@ -19,6 +19,7 @@ What this code guarantees, and what it does not:
 
 import os
 import re
+from typing import Any
 import shlex
 import subprocess
 import sys
@@ -29,7 +30,7 @@ import click
 _STATE_NAME = re.compile(r"^[A-Za-z0-9 _-]+$")
 
 
-def run_hook(hook_command):
+def run_hook(hook_command: str) -> tuple[int, str, str]:
     """Run a hook command, no shell. Returns (returncode, stdout, stderr)."""
     try:
         args = shlex.split(hook_command)
@@ -50,7 +51,7 @@ def run_hook(hook_command):
     return result.returncode, result.stdout, result.stderr
 
 
-def validate_describe(view):
+def validate_describe(view: object) -> str | None:
     """Validate a parsed describe document. Returns an error string or None.
 
     Contract, for hook authors:
@@ -94,7 +95,7 @@ def validate_describe(view):
     return None
 
 
-def format_describe(view):
+def format_describe(view: dict[str, Any]) -> str:
     """Render a validated view in normalized TOML, no raw hook text.
 
     State names are validated to letters, digits, space, hyphen,
@@ -111,12 +112,12 @@ def format_describe(view):
 
 @click.group()
 @click.version_option("0.1.0", prog_name="workpull")
-def cli():
+def cli() -> None:
     """Workpull: pull work, claim it, finish it, then pull again."""
 
 
 @cli.command()
-def describe():
+def describe() -> None:
     """Describe a backend's states and claim transition."""
     hook = os.environ.get("DESCRIBE_HOOK")
     if not hook:
@@ -143,7 +144,7 @@ def describe():
     click.echo(format_describe(view))
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     """Entry point for `python -m workpull`."""
     if argv is None:
         cli()

@@ -25,6 +25,8 @@ as missing, do not pivot to another toolchain or language.
 - Tests: unittest, stdlib only, no pytest.
 - Lint: pymarkdown, config in `.pymarkdown.json`, declared as a
   dev dependency in `pyproject.toml` (`pip install -e ".[dev]"`).
+- Type check: pyrefly, config in `pyrefly.toml`, declared as a
+  dev dependency in `pyproject.toml`. Code uses type hints.
 - Skill files use YAML frontmatter.
 
 ## Install
@@ -56,6 +58,7 @@ All `python` commands below are the venv Python, after setup.
 
 - Test: `python scripts/dev.py test`
 - Lint: `python scripts/dev.py lint`
+- Type: `python scripts/dev.py type`
 - Describe: `DESCRIBE_HOOK="python adapters/mock_describe.py"`
   `python -m workpull describe`
 

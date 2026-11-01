@@ -80,6 +80,7 @@ consumer.
 ```bash
 python scripts/dev.py test
 python scripts/dev.py lint
+python scripts/dev.py type
 ```
 
 See `AGENTS.md` for the full workflow.

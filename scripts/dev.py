@@ -6,6 +6,7 @@ script itself:
     python scripts/dev.py setup
     python scripts/dev.py test
     python scripts/dev.py lint
+    python scripts/dev.py type
 
 Installation requires a venv. There is no supported system install.
 """
@@ -85,6 +86,25 @@ def cmd_test(_args):
     return run([str(python), "-m", "unittest", "discover", "-s", "tests"])
 
 
+def cmd_type(_args):
+    pyrefly = shutil.which("pyrefly")
+    if not pyrefly:
+        for name in ("pyrefly", "pyrefly.exe"):
+            venv_pyrefly = venv_python().parent / name
+            if venv_pyrefly.exists():
+                pyrefly = str(venv_pyrefly)
+                break
+    if not pyrefly:
+        print(
+            "error: pyrefly not found. Run: python scripts/dev.py setup",
+            file=sys.stderr,
+        )
+        return 1
+    return run(
+        [pyrefly, "check", "workpull", "tests", "scripts", "adapters", "plugins"]
+    )
+
+
 def cmd_lint(_args):
     pymarkdown = shutil.which("pymarkdown")
     if not pymarkdown:
@@ -107,12 +127,14 @@ def main(argv=None):
     sub.add_parser("install", help="Install, only inside an activated venv.")
     sub.add_parser("test", help="Run unittest.")
     sub.add_parser("lint", help="Run pymarkdown on docs.")
+    sub.add_parser("type", help="Run pyrefly type check.")
     args = parser.parse_args(argv)
     commands = {
         "setup": cmd_setup,
         "install": cmd_install,
         "test": cmd_test,
         "lint": cmd_lint,
+        "type": cmd_type,
     }
     return commands[args.command](args)
 

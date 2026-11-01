@@ -13,12 +13,30 @@ import sys
 import tomllib
 import unittest
 from pathlib import Path
+from typing import NotRequired, TypedDict
 
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTER = ROOT / "plugins" / "github" / "describe.py"
 
 
-def run_cli(env):
+class View(TypedDict):
+    states: list[str]
+    claim: dict[str, str]
+
+
+class Outcome(TypedDict, total=False):
+    exit_code: int
+    view: View | None
+    output_contains: bool
+
+
+def parse_view(text: str) -> View:
+    """Parse TOML output as a View. Values are Any from TOML."""
+    parsed = tomllib.loads(text)
+    return View(states=parsed["states"], claim=parsed["claim"])
+
+
+def run_cli(env: dict[str, str]):
     """Run `python -m workpull describe` with an explicit env."""
     return subprocess.run(
         [sys.executable, "-m", "workpull", "describe"],
@@ -31,16 +49,31 @@ def run_cli(env):
 
 
 class TestGitHubDescribe(unittest.TestCase):
-    def test_cli_via_github_adapter(self):
+    def test_cli_via_github_adapter(self) -> None:
+        # GIVEN
+        expected: Outcome = {
+            "exit_code": 0,
+            "view": {"states": ["Open", "Closed"], "claim": {"Open": "Closed"}},
+        }
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = f"{sys.executable} {ADAPTER}"
+        # WHEN
         result = run_cli(env)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        view = tomllib.loads(result.stdout)
-        self.assertEqual(view["states"], ["Open", "Closed"])
-        self.assertEqual(view["claim"], {"Open": "Closed"})
+        # THEN
+        actual: Outcome = {
+            "exit_code": result.returncode,
+            "view": parse_view(result.stdout) if result.returncode == 0 else None,
+        }
+        self.assertEqual(expected, actual)
 
-    def test_adapter_direct_output_is_exact(self):
+    def test_adapter_direct_output_is_exact(self) -> None:
+        # GIVEN
+        expected: Outcome = {
+            "exit_code": 0,
+            "view": {"states": ["Open", "Closed"], "claim": {"Open": "Closed"}},
+            "output_contains": False,
+        }
+        # WHEN
         result = subprocess.run(
             [sys.executable, str(ADAPTER)],
             cwd=ROOT,
@@ -48,12 +81,13 @@ class TestGitHubDescribe(unittest.TestCase):
             text=True,
             timeout=30,
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        view = tomllib.loads(result.stdout)
-        self.assertEqual(set(view), {"states", "claim"})
-        self.assertEqual(view["states"], ["Open", "Closed"])
-        self.assertEqual(view["claim"], {"Open": "Closed"})
-        self.assertNotIn("Backlog", result.stdout)
+        # THEN
+        actual: Outcome = {
+            "exit_code": result.returncode,
+            "view": parse_view(result.stdout) if result.returncode == 0 else None,
+            "output_contains": "Backlog" in result.stdout,
+        }
+        self.assertEqual(expected, actual)
 
 
 if __name__ == "__main__":
