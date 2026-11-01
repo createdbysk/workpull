@@ -11,8 +11,13 @@ git clone https://github.com/createdbysk/workpull.git
 ```
 
 Then agents take over. On a fresh clone, the agent bootstraps
-the repo itself, before any other work: run
-`python scripts/dev.py setup`, then proceed.
+the repo itself, before any other work: find a Python 3.12
+interpreter, in order `python`, `python3`, `py -3.12`, use
+the first that reports 3.12, and run
+`<interpreter> scripts/dev.py setup`, then proceed. After
+setup, use the venv Python for all repo commands. If no
+interpreter reports 3.12, stop and report the prerequisite
+as missing, do not pivot to another toolchain or language.
 
 ## Tech stack
 
@@ -28,12 +33,14 @@ Installation requires a venv. There is no supported system install.
 All developer tasks are a Python script, stdlib only, cross-platform.
 
 - Agent bootstrap, on a fresh clone, before any other work:
-  `python scripts/dev.py setup`. The agent runs this itself.
+  find the interpreter as in Ergonomics, then run
+  `<interpreter> scripts/dev.py setup`. The agent runs this itself.
 - After setup, activate the venv for interactive work:
   `source .venv/bin/activate`, or `.venv\Scripts\activate` on Windows.
   Agent commands that do not need activation, such as
   `python scripts/dev.py test` and `python scripts/dev.py lint`,
-  run without activation.
+  run with the venv Python, or with the interpreter found
+  in Ergonomics.
 - `python scripts/dev.py install` refuses to run outside an
   activated venv.
 
@@ -44,6 +51,8 @@ push and pull request: bootstrap, then `python scripts/dev.py test`
 and `python scripts/dev.py lint`, on Ubuntu and Windows, Python 3.12.
 
 ## Commands
+
+All `python` commands below are the venv Python, after setup.
 
 - Test: `python scripts/dev.py test`
 - Lint: `python scripts/dev.py lint`

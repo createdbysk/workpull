@@ -14,13 +14,16 @@ Do not use them, and do not invent their commands.
 
 ```bash
 git clone https://github.com/createdbysk/workpull.git
-python scripts/dev.py setup
 ```
 
+Find a Python 3.12 interpreter, in order `python`, `python3`,
+`py -3.12`, and run `<interpreter> scripts/dev.py setup`.
+
 This creates a venv and installs dev dependencies. There is no
-supported system install. The entry point, from a checkout, is
-`python -m workpull`. Plugins and adapters in this repo are
-examples for a checkout, not installed package contents.
+supported system install. After setup, use the venv Python.
+The entry point, from a checkout, is `python -m workpull`.
+Plugins and adapters in this repo are examples for a checkout,
+not installed package contents.
 
 ## Describe, with the mock
 
