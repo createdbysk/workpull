@@ -38,7 +38,7 @@ Output:
 states = ["Backlog", "Done"]
 
 [claim]
-Backlog = "Done"
+"Backlog" = "Done"
 ```
 
 ## Describe, with the GitHub issues mock
@@ -54,7 +54,7 @@ Output:
 states = ["Open", "Closed"]
 
 [claim]
-Open = "Closed"
+"Open" = "Closed"
 ```
 
 The GitHub mock validates the shape of the describe contract.

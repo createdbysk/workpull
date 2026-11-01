@@ -19,11 +19,11 @@ What this code guarantees, and what it does not:
 
 import os
 import re
-from typing import Any
 import shlex
 import subprocess
 import sys
 import tomllib
+from typing import Any
 
 import click
 

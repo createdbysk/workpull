@@ -69,5 +69,5 @@ Output:
 states = ["Backlog", "Done"]
 
 [claim]
-Backlog = "Done"
+"Backlog" = "Done"
 ```
