@@ -59,23 +59,7 @@ Do not front-load later requirements.
    Do not read design or implementation documents yet.
 2. Design: write `design/<nnn>-<name>.md`, how only.
    Load it only when the design step requires it.
-3. Test first, red with a specific failure, not any failure.
-   For a new command, first write a help test expecting
-   the command in help, and watch it fail: no Click
-   implementation of that command exists yet.
-   Then add the command, wired into the Click group,
-   with a body that raises NotImplementedError. The help
-   test now passes, because help lists the command
-   without running its body, and so does not hit the
-   NotImplementedError. That pass proves registration
-   and wiring, not implementation.
-   Then write the test for the command's real behavior,
-   and watch it fail with NotImplementedError. That red
-   proves the test is wired to the implementation, and
-   eliminates incorrectly wired code that masquerades
-   as a function not implemented. Then implement, to green.
-   Use Click's runner for the help part. Do not test the
-   module entry: Python and Click are assumed correct.
+3. Test first: write the unittest, run it, watch it fail.
 4. Implement the smallest code that passes the test.
 5. Defensive tests: happy path first, then failure, validation,
    and injection cases. No invented output on failure.
