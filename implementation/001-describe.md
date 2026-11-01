@@ -20,7 +20,9 @@
   - `describe()`: reads `DESCRIBE_HOOK`, runs the hook, parses
     stdout with `tomllib`, validates, prints the view on success,
     returns a non-zero exit code on failure.
-  - `main(argv)`: dispatches `["describe"]`, usage error otherwise.
+  - `main(argv)`: runs the Click group. With no arguments,
+    this is the real entry point. With arguments, the Click
+    exit code is returned.
 - `workpull/__main__.py`: entry point, `sys.exit(main())`.
 - `workpull/__init__.py`: package marker.
 - `adapters/mock_describe.py`: mock describe hook, prints the
@@ -49,6 +51,10 @@ filesystem.
 - State name containing shell metacharacters: rejected, non-zero.
 - Hook output containing a TOML comment: comment is not printed,
   only the normalized view is printed.
+- Spaced state name: claim keys are quoted in the normalized
+  view, so the output re-parses as TOML.
+- Unhashable state or claim target: rejected with a clean
+  error, not a traceback.
 - `--help` and `--version`: exit 0.
 
 ## Manual check

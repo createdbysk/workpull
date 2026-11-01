@@ -9,6 +9,7 @@ Before a pull request:
 ```bash
 python scripts/dev.py test
 python scripts/dev.py lint
+python scripts/dev.py type
 ```
 
 A pull request also needs an independent review, by a reviewer

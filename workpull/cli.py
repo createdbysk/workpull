@@ -31,7 +31,11 @@ _STATE_NAME = re.compile(r"^[A-Za-z0-9 _-]+$")
 
 
 def run_hook(hook_command: str) -> tuple[int, str, str]:
-    """Run a hook command, no shell. Returns (returncode, stdout, stderr)."""
+    """Run a hook command, no shell. Returns (returncode, stdout, stderr).
+
+    The hook is killed after 30 seconds, and that timeout is
+    reported only as a generic hook failure.
+    """
     try:
         args = shlex.split(hook_command)
     except ValueError as exc:
@@ -72,12 +76,14 @@ def validate_describe(view: object) -> str | None:
     claim = view["claim"]
     if not isinstance(states, list) or not states:
         return "states must be a non-empty list"
+    for state in states:
+        if not isinstance(state, str):
+            return f"invalid state name: {state!r}"
     if len(states) != len(set(states)):
         return "states must be unique"
     for state in states:
         if (
-            not isinstance(state, str)
-            or not _STATE_NAME.match(state)
+            not _STATE_NAME.match(state)
             or state != state.strip()
             or not state.strip()
         ):
@@ -86,6 +92,8 @@ def validate_describe(view: object) -> str | None:
         return "claim must be a table"
     order = {state: index for index, state in enumerate(states)}
     for source, target in claim.items():
+        if not isinstance(source, str) or not isinstance(target, str):
+            return f"invalid claim: {source!r} -> {target!r}"
         if source not in order:
             return f"claim source not in states: {source!r}"
         if target not in order:
@@ -106,14 +114,14 @@ def format_describe(view: dict[str, Any]) -> str:
     lines.append("[claim]")
     for source in view["states"]:
         if source in view["claim"]:
-            lines.append(f'{source} = "{view["claim"][source]}"')
+            lines.append(f'"{source}" = "{view["claim"][source]}"')
     return "\n".join(lines)
 
 
 @click.group()
 @click.version_option("0.1.0", prog_name="workpull")
 def cli() -> None:
-    """Workpull: pull work, claim it, finish it, then pull again."""
+    """Workpull: describe a backend's states and claim transition."""
 
 
 @cli.command()
@@ -145,15 +153,20 @@ def describe() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point for `python -m workpull`."""
+    """Entry point for `python -m workpull`.
+
+    With no arguments, this is the real entry point, and Click
+    handles exit codes itself. With arguments, this is a
+    programmatic call, and the Click exit code is returned.
+    """
     if argv is None:
         cli()
         return 0
     try:
-        cli.main(args=argv, standalone_mode=False)
+        result = cli.main(args=argv, prog_name="workpull", standalone_mode=False)
     except click.exceptions.Exit as exc:
         return exc.exit_code
     except click.ClickException as exc:
         exc.show()
         return exc.exit_code
-    return 0
+    return result if isinstance(result, int) else 0

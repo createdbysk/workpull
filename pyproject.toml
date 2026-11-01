@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "workpull"
 version = "0.1.0"
-description = "a backend-agnostic, pluggable pull system. Pull work, claim it, finish it, then pull again."
+description = "a backend-agnostic, pluggable pull system. Only describe is available so far."
 license = {text = "Apache-2.0"}
 requires-python = ">=3.12,<3.13"
 dependencies = ["click>=8.1,<9"]

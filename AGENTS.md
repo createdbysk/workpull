@@ -22,7 +22,7 @@ as missing, do not pivot to another toolchain or language.
 ## Tech stack
 
 - Python 3.12. Runtime dependency: Click, for the CLI.
-- Tests: unittest, stdlib only, no pytest.
+- Tests: unittest, plus Click's test runner for CLI tests.
 - Lint: pymarkdown, config in `.pymarkdown.json`, declared as a
   dev dependency in `pyproject.toml` (`pip install -e ".[dev]"`).
 - Type check: pyrefly, config in `pyrefly.toml`, declared as a

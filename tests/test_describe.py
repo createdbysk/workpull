@@ -12,7 +12,7 @@ import tempfile
 import tomllib
 import unittest
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import TypedDict
 
 from click.testing import CliRunner
 
@@ -298,6 +298,65 @@ Done = "Backlog"
 
 [claim]
 "Backlog; rm -rf /" = "Done"
+"""
+        # WHEN
+        with isolated_filesystem():
+            hook = write_mock_hook(body)
+            env = dict(os.environ)
+            env["DESCRIBE_HOOK"] = hook
+            result = self.run_describe(env)
+        # THEN
+        actual: Outcome = describe_outcome(result)
+        self.assertEqual(expected, actual)
+
+    def test_spaced_state_produces_valid_toml(self) -> None:
+        # GIVEN
+        expected: Outcome = {
+            "exit_code": 0,
+            "view": {
+                "states": ["In Progress", "Done"],
+                "claim": {"In Progress": "Done"},
+            },
+        }
+        body = """states = ["In Progress", "Done"]
+
+[claim]
+"In Progress" = "Done"
+"""
+        # WHEN
+        with isolated_filesystem():
+            hook = write_mock_hook(body)
+            env = dict(os.environ)
+            env["DESCRIBE_HOOK"] = hook
+            result = self.run_describe(env)
+        # THEN
+        actual: Outcome = describe_outcome(result)
+        self.assertEqual(expected, actual)
+
+    def test_unhashable_state_is_rejected(self) -> None:
+        # GIVEN
+        expected: Outcome = {"exit_code": 2, "view": None}
+        body = """states = [{a = 1}, "Done"]
+
+[claim]
+"""
+        # WHEN
+        with isolated_filesystem():
+            hook = write_mock_hook(body)
+            env = dict(os.environ)
+            env["DESCRIBE_HOOK"] = hook
+            result = self.run_describe(env)
+        # THEN
+        actual: Outcome = describe_outcome(result)
+        self.assertEqual(expected, actual)
+
+    def test_unhashable_claim_target_is_rejected(self) -> None:
+        # GIVEN
+        expected: Outcome = {"exit_code": 2, "view": None}
+        body = """states = ["Backlog", "Done"]
+
+[claim]
+Backlog = ["Done"]
 """
         # WHEN
         with isolated_filesystem():

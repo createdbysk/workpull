@@ -13,7 +13,7 @@ import sys
 import tomllib
 import unittest
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import TypedDict
 
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTER = ROOT / "plugins" / "github" / "describe.py"

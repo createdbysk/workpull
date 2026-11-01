@@ -32,8 +32,6 @@
 - Mock hooks for these tests are Python scripts written into
   the isolated filesystem, then invoked through the hook
   environment variable.
-- Subprocess tests for the entry point are kept for
-  `python -m workpull`, to prove the module entry still works.
 
 ## SOLID mapping
 
