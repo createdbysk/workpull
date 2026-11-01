@@ -81,7 +81,8 @@ def cmd_install(_args):
 
 
 def cmd_test(_args):
-    return run([sys.executable, "-m", "unittest", "discover", "-s", "tests"])
+    python = venv_python() if venv_python().exists() else sys.executable
+    return run([str(python), "-m", "unittest", "discover", "-s", "tests"])
 
 
 def cmd_lint(_args):

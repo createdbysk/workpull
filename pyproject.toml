@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "a backend-agnostic, pluggable pull system. Pull work, claim it, finish it, then pull again."
 license = {text = "Apache-2.0"}
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = ["click>=8.1,<9"]
 
 [project.optional-dependencies]
 dev = ["pymarkdownlnt>=0.9.41"]

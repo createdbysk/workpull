@@ -2,7 +2,7 @@
 
 ## Language and tools
 
-- Python 3.12, stdlib only for runtime, no runtime dependencies.
+- Python 3.12. Runtime dependency: Click, for the CLI.
 - Tests: unittest, stdlib only, no pytest.
 - Lint: pymarkdown, declared as a dev dependency in
   `pyproject.toml` (`pymarkdownlnt>=0.9.41`, install with

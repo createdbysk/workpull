@@ -24,6 +24,8 @@ import subprocess
 import sys
 import tomllib
 
+import click
+
 _STATE_NAME = re.compile(r"^[A-Za-z0-9 _-]+$")
 
 
@@ -107,45 +109,50 @@ def format_describe(view):
     return "\n".join(lines)
 
 
+@click.group()
+@click.version_option("0.1.0", prog_name="workpull")
+def cli():
+    """Workpull: pull work, claim it, finish it, then pull again."""
+
+
+@cli.command()
 def describe():
-    """Implement `workpull describe`. Returns an exit code."""
+    """Describe a backend's states and claim transition."""
     hook = os.environ.get("DESCRIBE_HOOK")
     if not hook:
-        print("DESCRIBE_HOOK is not set", file=sys.stderr)
-        return 2
+        click.echo("DESCRIBE_HOOK is not set", err=True)
+        raise click.exceptions.Exit(2)
     returncode, stdout, stderr = run_hook(hook)
     if returncode != 0:
         if stderr:
-            print(stderr, file=sys.stderr, end="")
+            click.echo(stderr, err=True, nl=False)
         else:
-            print("describe hook failed", file=sys.stderr)
-        return returncode or 1
+            click.echo("describe hook failed", err=True)
+        raise click.exceptions.Exit(returncode or 1)
     try:
         view = tomllib.loads(stdout)
     except tomllib.TOMLDecodeError as exc:
-        print(f"describe hook output is not valid TOML: {exc}", file=sys.stderr)
-        return 2
+        click.echo(
+            f"describe hook output is not valid TOML: {exc}", err=True
+        )
+        raise click.exceptions.Exit(2)
     error = validate_describe(view)
     if error:
-        print(f"invalid describe output: {error}", file=sys.stderr)
-        return 2
-    print(format_describe(view))
-    return 0
+        click.echo(f"invalid describe output: {error}", err=True)
+        raise click.exceptions.Exit(2)
+    click.echo(format_describe(view))
 
 
 def main(argv=None):
-    argv = list(sys.argv[1:] if argv is None else argv)
-    if argv == ["describe"]:
-        return describe()
-    if argv in (["--help"], ["-h"]):
-        print("usage: python -m workpull describe")
-        print("       python -m workpull --version")
-        print()
-        print("Only describe is available.")
+    """Entry point for `python -m workpull`."""
+    if argv is None:
+        cli()
         return 0
-    if argv == ["--version"]:
-        print("workpull 0.1.0")
-        return 0
-    print("usage: python -m workpull describe", file=sys.stderr)
-    print("       python -m workpull --help", file=sys.stderr)
-    return 2
+    try:
+        cli.main(args=argv, standalone_mode=False)
+    except click.exceptions.Exit as exc:
+        return exc.exit_code
+    except click.ClickException as exc:
+        exc.show()
+        return exc.exit_code
+    return 0

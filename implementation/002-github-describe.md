@@ -2,7 +2,7 @@
 
 ## Concrete build
 
-- Language: Python 3.12, stdlib only.
+- Language: Python 3.12. Runtime dependency: Click, for the CLI.
 - Adapter: `plugins/github/describe.py`, run as
   `python plugins/github/describe.py` via `DESCRIBE_HOOK`.
   It prints exactly `states = ["Open", "Closed"]` and

@@ -16,7 +16,7 @@ the repo itself, before any other work: run
 
 ## Tech stack
 
-- Python 3.12, stdlib only for runtime, no runtime dependencies.
+- Python 3.12. Runtime dependency: Click, for the CLI.
 - Tests: unittest, stdlib only, no pytest.
 - Lint: pymarkdown, config in `.pymarkdown.json`, declared as a
   dev dependency in `pyproject.toml` (`pip install -e ".[dev]"`).
