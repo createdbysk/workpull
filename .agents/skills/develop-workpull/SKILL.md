@@ -24,6 +24,9 @@ Do not front-load later requirements.
 
 ## Workflow, one requirement
 
+0. Install, venv first: `bash scripts/setup.sh`, then
+   `source .venv/bin/activate`. `make install` refuses to run
+   outside an activated venv. No system install is supported.
 1. Requirement: write `requirements/<nnn>-<name>.md`, what only.
    Do not read design or implementation documents yet.
 2. Design: write `design/<nnn>-<name>.md`, how only.

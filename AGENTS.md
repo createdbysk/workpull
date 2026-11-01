@@ -12,6 +12,14 @@ states and transitions. Workpull never assumes them.
   dev dependency in `pyproject.toml` (`pip install -e ".[dev]"`).
 - Skill files use YAML frontmatter.
 
+## Install
+
+Installation requires a venv. There is no supported system install.
+
+- Setup: `bash scripts/setup.sh`, then `source .venv/bin/activate`
+- Or: `make venv`, then `source .venv/bin/activate`
+- `make install` refuses to run outside an activated venv.
+
 ## Commands
 
 - Test: `python3 -m unittest tests.test_describe`
