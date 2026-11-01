@@ -24,9 +24,10 @@ Do not front-load later requirements.
 
 ## Workflow, one requirement
 
-0. Install, venv first: `bash scripts/setup.sh`, then
-   `source .venv/bin/activate`. `make install` refuses to run
-   outside an activated venv. No system install is supported.
+0. Install, venv first: `python scripts/dev.py setup`, then
+   activate the venv. `python scripts/dev.py install` refuses
+   to run outside an activated venv. No system install is
+   supported, and no Makefile or bash setup script is used.
 1. Requirement: write `requirements/<nnn>-<name>.md`, what only.
    Do not read design or implementation documents yet.
 2. Design: write `design/<nnn>-<name>.md`, how only.
@@ -38,8 +39,8 @@ Do not front-load later requirements.
 6. Implementation document: write
    `implementation/<nnn>-<name>.md`, concrete build only.
 7. Lint and test:
-   - `python3 -m unittest`
-   - `pymarkdown --config .pymarkdown.json scan .agents/skills/workpull/SKILL.md .agents/skills/develop-workpull/SKILL.md requirements/ design/ implementation/`
+   - `python scripts/dev.py test`
+   - `python scripts/dev.py lint`
 8. Push to a branch, never to main. Main is protected, pull
    request required, rebase only, no squash, no merge commits.
 

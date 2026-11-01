@@ -15,15 +15,18 @@ states and transitions. Workpull never assumes them.
 ## Install
 
 Installation requires a venv. There is no supported system install.
+No Makefile, no bash setup script, Windows-first: all developer
+tasks are a Python script, stdlib only.
 
-- Setup: `bash scripts/setup.sh`, then `source .venv/bin/activate`
-- Or: `make venv`, then `source .venv/bin/activate`
-- `make install` refuses to run outside an activated venv.
+- Setup: `python scripts/dev.py setup`, then activate the venv:
+  `source .venv/bin/activate`, or `.venv\Scripts\activate` on Windows
+- `python scripts/dev.py install` refuses to run outside an
+  activated venv.
 
 ## Commands
 
-- Test: `python3 -m unittest tests.test_describe`
-- Lint: `pymarkdown --config .pymarkdown.json scan .agents/skills/workpull/SKILL.md .agents/skills/develop-workpull/SKILL.md requirements/ design/ implementation/`
+- Test: `python scripts/dev.py test`
+- Lint: `python scripts/dev.py lint`
 - Describe: `DESCRIBE_HOOK=adapters/mock_describe.sh python3 -m workpull describe`
 
 ## Layout
