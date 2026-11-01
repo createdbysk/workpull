@@ -1,4 +1,5 @@
-"""Tests for the GitHub issues describe adapter.
+"""Tests for the GitHub issues describe mock, which validates
+the shape of the describe contract.
 
 Tests drive the CLI as a subprocess with DESCRIBE_HOOK pointing
 at the adapter script, with an explicit environment. Describe

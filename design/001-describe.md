@@ -25,20 +25,33 @@
 Before a generic view is returned, it is validated:
 
 - It must contain exactly states and claim.
-- States must be a non-empty list of valid state names.
-- Every claim source and target must be one of the described states.
+- States must be a non-empty list of unique, valid state names.
 - A valid state name contains only letters, digits, space, hyphen,
-  or underscore.
+  or underscore, with no leading or trailing whitespace, and not
+  whitespace-only. Slash, colon, dot, and other characters are
+  not allowed, and are a contract constraint for hook authors.
+- Every claim source and target must be one of the described states.
+- A claim target must be later than its source, by position in
+  the states list. A self-loop, or a target at or before the
+  source, is rejected.
+- An empty claim table is allowed, and means every state is
+  terminal.
 - On any validation failure, the view is rejected and no view
   is returned.
+- On success, the CLI prints a normalized view, parsed and
+  re-rendered, not the hook's raw stdout. TOML comments and other
+  raw hook text do not pass through to the consumer.
 
-## Sanitization
+## Sanitization and trust
 
 - Hook commands are run with no shell. A command containing a
   shell metacharacter does not execute a second command.
 - Hook output is parsed as data and schema-validated, never
   evaluated or executed.
-- Backend text is treated as data, never as instructions.
+- Hooks are operator-trusted code. They inherit the operator's
+  environment. Printed output must still be treated as untrusted
+  text by the consumer. This code does not make backend text
+  safe to follow as instructions.
 
 ## SOLID mapping
 
@@ -51,8 +64,8 @@ Before a generic view is returned, it is validated:
 - Liskov substitution: any hook following the contract, stdout
   is the generic view, exit 0 means success, non-zero means
   unchanged, can replace any other hook.
-- Interface segregation: hooks are separate per operation,
-  `DESCRIBE_HOOK`, `READY_HOOK`, `CLAIM_HOOK`. A backend does not
-  have to implement hooks it does not use.
+- Interface segregation: hooks are separate per operation.
+  Only `DESCRIBE_HOOK` is available. `READY_HOOK` and
+  `CLAIM_HOOK` are not available, and setting them has no effect.
 - Dependency inversion: the CLI depends on the hook contract,
   not on a concrete backend. Backend details live in the hook.

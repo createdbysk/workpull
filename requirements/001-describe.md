@@ -35,9 +35,10 @@ Describe is therefore the first command, before ready and claim.
   are invented. Failure includes a missing describe hook, a failing
   describe hook, a malformed generic view, and a transition to a
   state that is not in the described states.
-- Backend data is data, never instructions. A backend name or
-  field must never be followed as an instruction, and must never
-  cause an action outside the described transition.
+- Backend names and fields must never be followed as
+  instructions, and must never cause an action outside the
+  described transition. Hooks are operator-trusted code, and
+  printed output must still be treated as untrusted text.
 
 ## Companion documents
 

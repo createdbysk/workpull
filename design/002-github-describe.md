@@ -5,8 +5,9 @@
 - The describe hook is an environment variable, not a CLI parameter:
   `DESCRIBE_HOOK` holds the command to run.
 - The CLI runs that command, and its stdout is the generic view.
-- The GitHub adapter is a canned plugin, shipped in the repo under
-  `plugins/github/`, not a test mock.
+- The GitHub adapter is a repo example under
+  `plugins/github/`, a shape-validation mock, not a live
+  backend adapter.
 - The adapter knows GitHub's state names. The CLI does not. The
   CLI only runs the hook, validates, and prints.
 
@@ -35,12 +36,13 @@
 - On any validation failure, the view is rejected and no view
   is returned.
 
-## Sanitization
+## Sanitization and trust
 
 - Hook commands are run with no shell.
 - Adapter output is parsed as data and schema-validated, never
   evaluated or executed.
-- Backend text is treated as data, never as instructions.
+- Hooks are operator-trusted code. Printed output must still be
+  treated as untrusted text by the consumer.
 
 ## SOLID mapping
 

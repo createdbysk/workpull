@@ -7,7 +7,7 @@
 - Lint: pymarkdown, declared as a dev dependency in
   `pyproject.toml` (`pymarkdownlnt>=0.9.41`, install with
   `pip install -e ".[dev]"`).
-- Project config: `pyproject.toml`, setuptools, Python >= 3.12.
+- Project config: `pyproject.toml`, setuptools, Python 3.12.
 
 ## Files
 
@@ -23,7 +23,7 @@
   - `main(argv)`: dispatches `["describe"]`, usage error otherwise.
 - `workpull/__main__.py`: entry point, `sys.exit(main())`.
 - `workpull/__init__.py`: package marker.
-- `adapters/mock_describe.sh`: mock describe hook, prints the
+- `adapters/mock_describe.py`: mock describe hook, prints the
   trivial Backlog/Done TOML view.
 - `tests/test_describe.py`: tests, driving the CLI as a subprocess
   with an explicit environment per test.
@@ -38,14 +38,20 @@ Run: `python scripts/dev.py test`
 - Failing hook: non-zero, no invented output.
 - Invalid TOML output: non-zero.
 - Transition to a state not in states: non-zero.
+- Duplicate states, self-loop claim, backwards claim, and
+  whitespace-padded state names: rejected, non-zero.
+- Empty claim table: accepted, meaning every state is terminal.
 - Hook command containing `;` and a side-effect command:
-  side-effect not executed, non-zero.
+  side-effect not executed, with and without a space before `;`.
 - State name containing shell metacharacters: rejected, non-zero.
+- Hook output containing a TOML comment: comment is not printed,
+  only the normalized view is printed.
+- `--help` and `--version`: exit 0.
 
 ## Manual check
 
 ```bash
-DESCRIBE_HOOK=adapters/mock_describe.sh python3 -m workpull describe
+DESCRIBE_HOOK="python adapters/mock_describe.py" python -m workpull describe
 ```
 
 Output:
