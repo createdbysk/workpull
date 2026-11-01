@@ -20,7 +20,7 @@ Describe is therefore the first command, before ready and claim.
 - A state with no outgoing claim transition is terminal in this
   system.
 
-## Trivial first system
+## Trivial system
 
 - States: Backlog, Done.
 - Claim transition: Backlog -> Done.
@@ -43,6 +43,3 @@ Describe is therefore the first command, before ready and claim.
 
 - Design: `design/001-describe.md`
 - Implementation: `implementation/001-describe.md`
-
-Each document has one responsibility. This document states what is
-required. It does not state how it is built.

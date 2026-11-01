@@ -38,6 +38,6 @@ not load a document for a later step while you are on an earlier one.
 
 ## Current scope
 
-Only describe is implemented. Ready and claim are later
-requirements. Do not use them, and do not invent their commands,
-until their requirement, design, and implementation documents exist.
+Only describe is available. Do not use ready or claim, and do
+not invent their commands, until their requirement, design, and
+implementation documents exist.

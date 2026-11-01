@@ -1,7 +1,6 @@
 """Workpull developer tasks, stdlib only, cross-platform.
 
-Replaces a Makefile and a bash setup script, which are a pain on
-Windows. Run with the system Python, no venv needed to run this
+Run with the system Python, no venv needed to run this
 script itself:
 
     python scripts/dev.py setup

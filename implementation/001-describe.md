@@ -1,9 +1,5 @@
 # Implementation 001 — Describe
 
-This document states the concrete build for requirement 001.
-See `requirements/001-describe.md` for what is required, and
-`design/001-describe.md` for how it is designed.
-
 ## Language and tools
 
 - Python 3.12, stdlib only for runtime, no runtime dependencies.
@@ -34,9 +30,7 @@ See `requirements/001-describe.md` for what is required, and
 
 ## Tests
 
-Run: `python3 -m unittest tests.test_describe -v`
-
-7 tests, all passing 2026-10-31:
+Run: `python scripts/dev.py test`
 
 - Happy path: mock hook prints Backlog/Done, CLI exit 0, output
   parses as TOML with states Backlog and Done, claim Backlog -> Done.

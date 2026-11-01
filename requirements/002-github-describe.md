@@ -14,13 +14,11 @@ states and transitions.
 - A state with no outgoing claim transition is terminal in this
   system.
 
-## Trivial first model
+## Model
 
 - States: Open, Closed.
 - Claim transition: Open -> Closed.
 - Closed is terminal, no work happens there.
-- This model is deliberately trivial. More states, for example
-  label-based states, are a later requirement, not this one.
 
 ## Success and failure
 
@@ -34,6 +32,3 @@ states and transitions.
 
 - Design: `design/002-github-describe.md`
 - Implementation: `implementation/002-github-describe.md`
-
-Each document has one responsibility. This document states what is
-required. It does not state how it is built.

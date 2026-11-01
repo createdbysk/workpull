@@ -6,17 +6,13 @@ states and transitions. Workpull never assumes them.
 
 ## Ergonomics
 
-Expected ergonomics, nothing more:
-
 ```bash
 git clone https://github.com/createdbysk/workpull.git
 ```
 
-Then agents take over. The user does no setup step. On a fresh
-clone, the agent bootstraps the repo itself, before any other
-work: run `python scripts/dev.py setup`, then proceed. Do not
-ask the user to create a venv, install dependencies, or run a
-setup command.
+Then agents take over. On a fresh clone, the agent bootstraps
+the repo itself, before any other work: run
+`python scripts/dev.py setup`, then proceed.
 
 ## Tech stack
 
@@ -29,12 +25,10 @@ setup command.
 ## Install
 
 Installation requires a venv. There is no supported system install.
-No Makefile, no bash setup script, Windows-first: all developer
-tasks are a Python script, stdlib only.
+All developer tasks are a Python script, stdlib only, cross-platform.
 
 - Agent bootstrap, on a fresh clone, before any other work:
   `python scripts/dev.py setup`. The agent runs this itself.
-  The user is not asked to run it.
 - After setup, activate the venv for interactive work:
   `source .venv/bin/activate`, or `.venv\Scripts\activate` on Windows.
   Agent commands that do not need activation, such as
@@ -45,7 +39,7 @@ tasks are a Python script, stdlib only.
 
 ## Validation in CI
 
-GitHub Actions, `.github/workflows/validate.yml`, runs on every
+GitHub Actions, `.github/workflows/ci.yml`, runs on every
 push and pull request: bootstrap, then `python scripts/dev.py test`
 and `python scripts/dev.py lint`, on Ubuntu and Windows, Python 3.12.
 

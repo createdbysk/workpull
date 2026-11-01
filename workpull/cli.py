@@ -1,7 +1,7 @@
-"""workpull CLI, requirement 001: describe.
+"""workpull CLI: describe.
 
-Single responsibility: run a hook command from the environment,
-validate its TOML output, print it. It knows no backend.
+Run a hook command from the environment, validate its TOML
+output, print it. It knows no backend.
 
 Sanitization, by design:
 - Hook commands are parsed with shlex.split and run with no shell.

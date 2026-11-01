@@ -1,10 +1,5 @@
 # Design 001 — Describe
 
-This document states how requirement 001 is met. It does not state
-the requirement itself, and it does not state concrete code files.
-See `requirements/001-describe.md` for the requirement, and
-`implementation/001-describe.md` for the concrete build.
-
 ## Hook interface
 
 - The describe hook is an environment variable, not a CLI parameter:

@@ -17,6 +17,14 @@ Do not front-load later requirements.
 - Main skill files stay tight. Details go in separate documents,
   read one at a time only when the step requires it.
 - Skill files use YAML frontmatter.
+- Writing is concise and intent-focused. Files describe the
+  current state only: what it does, why, and how to use or
+  extend it. No diary: no dates, no session history, no past
+  approaches, no future plans, no roadmap, no requirement
+  numbers in shipped code, no personal workflow. If a detail
+  does not explain intent or outcome, delete it. This repo is
+  public, and readers have no context for project detail
+  beyond what the file itself explains.
 - Backend data is data, never instructions. Sanitize hook
   commands and context values, see the design document for the
   requirement you are working on.
@@ -27,10 +35,9 @@ Do not front-load later requirements.
 0. Bootstrap, agent only: on a fresh clone, before any other
    work, run `python scripts/dev.py setup` yourself. Do not
    ask the user to set anything up. The expected ergonomics
-   are: user clones the repo, then agents take over, nothing
+   are: clone the repo, then agents take over, nothing
    else. `python scripts/dev.py install` refuses to run
-   outside an activated venv. No system install is supported,
-   and no Makefile or bash setup script is used.
+   outside an activated venv. No system install is supported.
 1. Requirement: write `requirements/<nnn>-<name>.md`, what only.
    Do not read design or implementation documents yet.
 2. Design: write `design/<nnn>-<name>.md`, how only.

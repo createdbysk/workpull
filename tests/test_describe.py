@@ -1,4 +1,4 @@
-"""Tests for requirement 001: workpull describe.
+"""Tests for workpull describe.
 
 Happy path first, then defensive tests. Tests drive the CLI as a
 subprocess with an explicit environment, never by mutating the
