@@ -24,10 +24,13 @@ Do not front-load later requirements.
 
 ## Workflow, one requirement
 
-0. Install, venv first: `python scripts/dev.py setup`, then
-   activate the venv. `python scripts/dev.py install` refuses
-   to run outside an activated venv. No system install is
-   supported, and no Makefile or bash setup script is used.
+0. Bootstrap, agent only: on a fresh clone, before any other
+   work, run `python scripts/dev.py setup` yourself. Do not
+   ask the user to set anything up. The expected ergonomics
+   are: user clones the repo, then agents take over, nothing
+   else. `python scripts/dev.py install` refuses to run
+   outside an activated venv. No system install is supported,
+   and no Makefile or bash setup script is used.
 1. Requirement: write `requirements/<nnn>-<name>.md`, what only.
    Do not read design or implementation documents yet.
 2. Design: write `design/<nnn>-<name>.md`, how only.

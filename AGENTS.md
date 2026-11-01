@@ -4,6 +4,20 @@ Workpull is a backend-agnostic, pluggable pull system. Pull work,
 claim it, finish it, then pull again. The backend defines its own
 states and transitions. Workpull never assumes them.
 
+## Ergonomics
+
+Expected ergonomics, nothing more:
+
+```bash
+git clone https://github.com/createdbysk/workpull.git
+```
+
+Then agents take over. The user does no setup step. On a fresh
+clone, the agent bootstraps the repo itself, before any other
+work: run `python scripts/dev.py setup`, then proceed. Do not
+ask the user to create a venv, install dependencies, or run a
+setup command.
+
 ## Tech stack
 
 - Python 3.12, stdlib only for runtime, no runtime dependencies.
@@ -18,8 +32,14 @@ Installation requires a venv. There is no supported system install.
 No Makefile, no bash setup script, Windows-first: all developer
 tasks are a Python script, stdlib only.
 
-- Setup: `python scripts/dev.py setup`, then activate the venv:
-  `source .venv/bin/activate`, or `.venv\Scripts\activate` on Windows
+- Agent bootstrap, on a fresh clone, before any other work:
+  `python scripts/dev.py setup`. The agent runs this itself.
+  The user is not asked to run it.
+- After setup, activate the venv for interactive work:
+  `source .venv/bin/activate`, or `.venv\Scripts\activate` on Windows.
+  Agent commands that do not need activation, such as
+  `python scripts/dev.py test` and `python scripts/dev.py lint`,
+  run without activation.
 - `python scripts/dev.py install` refuses to run outside an
   activated venv.
 
