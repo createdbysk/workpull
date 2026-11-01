@@ -18,9 +18,14 @@
 - `scripts/dev.py`: test command uses the venv Python when a
   venv exists, so the Click dependency is available, else the
   system Python.
-- `tests/test_click_cli.py`: CLI tests through Click's runner,
-  in an isolated filesystem built with tempfile. The module
-  entry is not tested: Python and Click are assumed correct.
+- `tests/test_describe.py`: describe tests through Click's
+  runner, in an isolated filesystem built with tempfile,
+  including the help test for describe and the version test.
+  There is no separate Click test file: Click is a framework,
+  not a capability, and unknown commands are not tested,
+  because Click's default handling is assumed correct. The
+  module entry is not tested: Python and Click are assumed
+  correct.
 
 ## Tests
 
@@ -28,10 +33,8 @@ Run: `python scripts/dev.py test`
 
 - Describe in an isolated filesystem: exit 0, TOML parses to
   Backlog and Done, claim Backlog -> Done.
-- Isolated filesystem contains only the mock hook after the run.
 - `--help` lists describe, exit 0.
 - `--version` prints 0.1.0, exit 0.
-- Unknown command: non-zero.
 
 ## Manual check
 

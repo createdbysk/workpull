@@ -211,6 +211,16 @@ Done = "Backlog"
             result = self.run_describe(env)
             self.assertNotEqual(result.exit_code, 0)
 
+    def test_help_lists_describe(self):
+        result = self.runner.invoke(cli, ["--help"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("describe", result.output)
+
+    def test_version(self):
+        result = self.runner.invoke(cli, ["--version"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("0.1.0", result.output)
+
 
 if __name__ == "__main__":
     unittest.main()
