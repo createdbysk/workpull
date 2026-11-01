@@ -77,14 +77,6 @@ class ClickCliTestCase(unittest.TestCase):
                 ["mock_describe.py"],
             )
 
-    def test_missing_hook_fails(self):
-        with isolated_filesystem():
-            env = dict(os.environ)
-            env.pop("DESCRIBE_HOOK", None)
-            result = self.runner.invoke(cli, ["describe"], env=env)
-            self.assertNotEqual(result.exit_code, 0)
-            self.assertNotIn("Backlog", result.output)
-
     def test_help_lists_describe(self):
         result = self.runner.invoke(cli, ["--help"])
         self.assertEqual(result.exit_code, 0, result.output)

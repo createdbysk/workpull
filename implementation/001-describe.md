@@ -32,6 +32,10 @@
 
 Run: `python scripts/dev.py test`
 
+Describe tests run through Click's runner, in an isolated
+filesystem. The single subprocess smoke test for the module
+entry lives in the Click CLI tests, not here.
+
 - Happy path: mock hook prints Backlog/Done, CLI exit 0, output
   parses as TOML with states Backlog and Done, claim Backlog -> Done.
 - Missing hook: non-zero, no invented output.
