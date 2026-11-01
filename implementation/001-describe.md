@@ -47,13 +47,13 @@ Run: `python3 -m unittest tests.test_describe -v`
 
 ## Manual check
 
-```
+```bash
 DESCRIBE_HOOK=adapters/mock_describe.sh python3 -m workpull describe
 ```
 
 Output:
 
-```
+```toml
 states = ["Backlog", "Done"]
 
 [claim]
