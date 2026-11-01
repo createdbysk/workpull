@@ -6,9 +6,10 @@ states and transitions. Workpull never assumes them.
 
 ## Tech stack
 
-- Python 3.12, stdlib only, no dependencies.
+- Python 3.12, stdlib only for runtime, no runtime dependencies.
 - Tests: unittest, stdlib only, no pytest.
-- Lint: pymarkdown, config in `.pymarkdown.json`.
+- Lint: pymarkdown, config in `.pymarkdown.json`, declared as a
+  dev dependency in `pyproject.toml` (`pip install -e ".[dev]"`).
 - Skill files use YAML frontmatter.
 
 ## Commands

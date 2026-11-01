@@ -6,8 +6,11 @@ See `requirements/001-describe.md` for what is required, and
 
 ## Language and tools
 
-- Python 3.12, stdlib only, no dependencies.
+- Python 3.12, stdlib only for runtime, no runtime dependencies.
 - Tests: unittest, stdlib only, no pytest.
+- Lint: pymarkdown, declared as a dev dependency in
+  `pyproject.toml` (`pymarkdownlnt>=0.9.41`, install with
+  `pip install -e ".[dev]"`).
 - Project config: `pyproject.toml`, setuptools, Python >= 3.12.
 
 ## Files
