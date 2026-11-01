@@ -1,13 +1,11 @@
 """Tests for the Click CLI, in an isolated filesystem.
 
-Tests drive the CLI through Click's runner, not a subprocess,
-except the module-entry test, which proves `python -m workpull`
-still works.
+Tests drive the CLI through Click's runner. The module entry
+is not tested: Python and Click are assumed correct.
 """
 
 import contextlib
 import os
-import subprocess
 import sys
 import tempfile
 import tomllib
@@ -18,7 +16,6 @@ from click.testing import CliRunner
 
 from workpull.cli import cli
 
-ROOT = Path(__file__).resolve().parents[1]
 
 TRIVIAL_VIEW = """states = ["Backlog", "Done"]
 
@@ -90,17 +87,6 @@ class ClickCliTestCase(unittest.TestCase):
     def test_unknown_command_fails(self):
         result = self.runner.invoke(cli, ["claim"])
         self.assertNotEqual(result.exit_code, 0)
-
-    def test_module_entry_still_works(self):
-        result = subprocess.run(
-            [sys.executable, "-m", "workpull", "--help"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("describe", result.stdout)
 
 
 if __name__ == "__main__":
