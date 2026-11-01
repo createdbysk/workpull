@@ -43,6 +43,12 @@ tasks are a Python script, stdlib only.
 - `python scripts/dev.py install` refuses to run outside an
   activated venv.
 
+## Validation in CI
+
+GitHub Actions, `.github/workflows/validate.yml`, runs on every
+push and pull request: bootstrap, then `python scripts/dev.py test`
+and `python scripts/dev.py lint`, on Ubuntu and Windows, Python 3.12.
+
 ## Commands
 
 - Test: `python scripts/dev.py test`
