@@ -11,7 +11,7 @@ states and transitions.
 - The states of GitHub issues, as defined by GitHub.
 - The transition of GitHub issues, as defined by that
   backend's state model. Claim does not move an item; see
-  requirement 004.
+  requirement 005.
 - A state with no outgoing transition is terminal in this
   system.
 

@@ -17,7 +17,7 @@ Describe is therefore the first command, before ready and claim.
 - The transitions of the backend, as defined by the backend:
   which state a transition moves an item from, and which
   state it moves it to. Claim does not move an item; see
-  requirement 004.
+  requirement 005.
 - The WIP limit of each non-terminal state, as defined by
   the backend. A finite limit is a positive integer.
   Unlimited is `inf`. Terminal states are not listed in
