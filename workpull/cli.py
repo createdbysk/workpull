@@ -158,6 +158,13 @@ def cli() -> None:
 
 
 @cli.command()
+@click.argument("state")
+def claim_ticket(state: str) -> None:
+    """Claim a single ticket in a state."""
+    raise NotImplementedError
+
+
+@cli.command()
 def describe() -> None:
     """Describe a backend's states and transitions."""
     hook = os.environ.get("DESCRIBE_HOOK")
