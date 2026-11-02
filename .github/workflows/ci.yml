@@ -23,3 +23,5 @@ jobs:
         run: python scripts/dev.py test
       - name: Lint
         run: python scripts/dev.py lint
+      - name: Type check
+        run: python scripts/dev.py type
