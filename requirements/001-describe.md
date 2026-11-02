@@ -14,16 +14,17 @@ Describe is therefore the first command, before ready and claim.
 ## What the generic view contains
 
 - The states of the backend, as defined by the backend.
-- The transitions of the backend, as defined by the backend.
-  In particular, the claim transition: which state a claim moves
-  an item from, and which state it moves it to.
-- A state with no outgoing claim transition is terminal in this
+- The transitions of the backend, as defined by the backend:
+  which state a transition moves an item from, and which
+  state it moves it to. Claim does not move an item; see
+  requirement 004.
+- A state with no outgoing transition is terminal in this
   system.
 
 ## Trivial system
 
 - States: Backlog, Done.
-- Claim transition: Backlog -> Done.
+- Transition: Backlog -> Done.
 - Backlog is where prioritization happens.
 - Done is terminal, no work happens there.
 

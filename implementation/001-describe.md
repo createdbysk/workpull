@@ -39,22 +39,22 @@ Describe tests run through Click's runner, in an isolated
 filesystem.
 
 - Happy path: mock hook prints Backlog/Done, CLI exit 0, output
-  parses as TOML with states Backlog and Done, claim Backlog -> Done.
+  parses as TOML with states Backlog and Done, transition Backlog -> Done.
 - Missing hook: non-zero, no invented output.
 - Failing hook: non-zero, no invented output.
 - Invalid TOML output: non-zero.
 - Transition to a state not in states: non-zero.
-- Duplicate states, self-loop claim, backwards claim, and
+- Duplicate states, self-loop transition, backwards transition, and
   whitespace-padded state names: rejected, non-zero.
-- Empty claim table: accepted, meaning every state is terminal.
+- Empty transitions table: accepted, meaning every state is terminal.
 - Hook command containing `;` and a side-effect command:
   side-effect not executed, with and without a space before `;`.
 - State name containing shell metacharacters: rejected, non-zero.
 - Hook output containing a TOML comment: comment is not printed,
   only the normalized view is printed.
-- Spaced state name: claim keys are quoted in the normalized
+- Spaced state name: transition keys are quoted in the normalized
   view, so the output re-parses as TOML.
-- Unhashable state or claim target: rejected with a clean
+- Unhashable state or transition target: rejected with a clean
   error, not a traceback.
 - `--help` and `--version`: exit 0.
 
@@ -69,6 +69,6 @@ Output:
 ```toml
 states = ["Backlog", "Done"]
 
-[claim]
+[transitions]
 "Backlog" = "Done"
 ```

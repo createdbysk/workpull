@@ -7,5 +7,5 @@ reference for the describe contract, not as a backend.
 
 print('states = ["Backlog", "Done"]')
 print()
-print("[claim]")
+print("[transitions]")
 print('Backlog = "Done"')

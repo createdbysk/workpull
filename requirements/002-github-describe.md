@@ -9,15 +9,16 @@ states and transitions.
 ## What the generic view contains
 
 - The states of GitHub issues, as defined by GitHub.
-- The claim transition of GitHub issues, as defined by that
-  backend's state model.
-- A state with no outgoing claim transition is terminal in this
+- The transition of GitHub issues, as defined by that
+  backend's state model. Claim does not move an item; see
+  requirement 004.
+- A state with no outgoing transition is terminal in this
   system.
 
 ## Model
 
 - States: Open, Closed.
-- Claim transition: Open -> Closed.
+- Transition: Open -> Closed.
 - Closed is terminal, no work happens there.
 
 ## Success and failure

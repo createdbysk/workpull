@@ -68,17 +68,17 @@ def validate_describe(view: object) -> str | None:
       space, hyphen, or underscore only, with no leading or
       trailing whitespace, and not whitespace-only. Slash, colon,
       dot, and other characters are not allowed.
-    - claim: table mapping a state to a later state in the states
+    - transitions: table mapping a state to a later state in the states
       list, by list position. A self-loop, or a target at or
-      before the source, is rejected. An empty claim table is
+      before the source, is rejected. An empty transitions table is
       allowed, and means every state is terminal.
     """
     if not isinstance(view, dict):
         return "describe output is not a TOML document"
-    if set(view) != {"states", "claim"}:
-        return "describe output must contain exactly states and claim"
+    if set(view) != {"states", "transitions"}:
+        return "describe output must contain exactly states and transitions"
     states = view["states"]
-    claim = view["claim"]
+    transitions = view["transitions"]
     if not isinstance(states, list) or not states:
         return "states must be a non-empty list"
     for state in states:
@@ -93,18 +93,18 @@ def validate_describe(view: object) -> str | None:
             or not state.strip()
         ):
             return f"invalid state name: {state!r}"
-    if not isinstance(claim, dict):
-        return "claim must be a table"
+    if not isinstance(transitions, dict):
+        return "transitions must be a table"
     order = {state: index for index, state in enumerate(states)}
-    for source, target in claim.items():
+    for source, target in transitions.items():
         if not isinstance(source, str) or not isinstance(target, str):
-            return f"invalid claim: {source!r} -> {target!r}"
+            return f"invalid transition: {source!r} -> {target!r}"
         if source not in order:
-            return f"claim source not in states: {source!r}"
+            return f"transition source not in states: {source!r}"
         if target not in order:
-            return f"claim target not in states: {target!r}"
+            return f"transition target not in states: {target!r}"
         if order[target] <= order[source]:
-            return f"claim target must be later than source: {source!r} -> {target!r}"
+            return f"transition target must be later than source: {source!r} -> {target!r}"
     return None
 
 
@@ -116,22 +116,22 @@ def format_describe(view: dict[str, Any]) -> str:
     """
     quoted = ", ".join(f'"{state}"' for state in view["states"])
     lines = [f"states = [{quoted}]", ""]
-    lines.append("[claim]")
+    lines.append("[transitions]")
     for source in view["states"]:
-        if source in view["claim"]:
-            lines.append(f'"{source}" = "{view["claim"][source]}"')
+        if source in view["transitions"]:
+            lines.append(f'"{source}" = "{view["transitions"][source]}"')
     return "\n".join(lines)
 
 
 @click.group()
 @click.version_option("0.1.0", prog_name="workpull")
 def cli() -> None:
-    """Workpull: describe a backend's states and claim transition."""
+    """Workpull: describe a backend's states and transitions."""
 
 
 @cli.command()
 def describe() -> None:
-    """Describe a backend's states and claim transition."""
+    """Describe a backend's states and transitions."""
     hook = os.environ.get("DESCRIBE_HOOK")
     if not hook:
         click.echo("DESCRIBE_HOOK is not set", err=True)

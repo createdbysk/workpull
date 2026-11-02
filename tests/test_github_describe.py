@@ -21,7 +21,7 @@ ADAPTER = ROOT / "plugins" / "github" / "describe.py"
 
 class View(TypedDict):
     states: list[str]
-    claim: dict[str, str]
+    transitions: dict[str, str]
 
 
 class Outcome(TypedDict, total=False):
@@ -33,7 +33,7 @@ class Outcome(TypedDict, total=False):
 def parse_view(text: str) -> View:
     """Parse TOML output as a View. Values are Any from TOML."""
     parsed = tomllib.loads(text)
-    return View(states=parsed["states"], claim=parsed["claim"])
+    return View(states=parsed["states"], transitions=parsed["transitions"])
 
 
 def run_cli(env: dict[str, str]):
@@ -53,7 +53,7 @@ class TestGitHubDescribe(unittest.TestCase):
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Open", "Closed"], "claim": {"Open": "Closed"}},
+            "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}},
         }
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = f"{Path(sys.executable).as_posix()} {ADAPTER.as_posix()}"
@@ -70,7 +70,7 @@ class TestGitHubDescribe(unittest.TestCase):
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Open", "Closed"], "claim": {"Open": "Closed"}},
+            "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}},
             "output_contains": False,
         }
         # WHEN

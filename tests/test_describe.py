@@ -20,14 +20,14 @@ from workpull.cli import cli
 
 TRIVIAL_VIEW = """states = ["Backlog", "Done"]
 
-[claim]
+[transitions]
 Backlog = "Done"
 """
 
 
 class View(TypedDict):
     states: list[str]
-    claim: dict[str, str]
+    transitions: dict[str, str]
 
 
 class Outcome(TypedDict, total=False):
@@ -64,7 +64,7 @@ def write_mock_hook(body: str) -> str:
 def parse_view(text: str) -> View:
     """Parse TOML output as a View. Values are Any from TOML."""
     parsed = tomllib.loads(text)
-    return View(states=parsed["states"], claim=parsed["claim"])
+    return View(states=parsed["states"], transitions=parsed["transitions"])
 
 
 def describe_outcome(result) -> Outcome:
@@ -88,7 +88,7 @@ class TestDescribe(unittest.TestCase):
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Backlog", "Done"], "claim": {"Backlog": "Done"}},
+            "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}},
         }
         # WHEN
         with isolated_filesystem():
@@ -144,7 +144,7 @@ class TestDescribe(unittest.TestCase):
         expected: Outcome = {"exit_code": 2, "view": None}
         body = """states = ["Backlog", "Done"]
 
-[claim]
+[transitions]
 Backlog = "Elsewhere"
 """
         # WHEN
@@ -190,7 +190,7 @@ Backlog = "Elsewhere"
         expected: Outcome = {"exit_code": 2, "view": None}
         body = """states = ["Backlog", "Backlog", "Done"]
 
-[claim]
+[transitions]
 Backlog = "Done"
 """
         # WHEN
@@ -203,12 +203,12 @@ Backlog = "Done"
         actual: Outcome = describe_outcome(result)
         self.assertEqual(expected, actual)
 
-    def test_self_loop_claim_is_rejected(self) -> None:
+    def test_self_loop_transition_is_rejected(self) -> None:
         # GIVEN
         expected: Outcome = {"exit_code": 2, "view": None}
         body = """states = ["Backlog", "Done"]
 
-[claim]
+[transitions]
 Backlog = "Backlog"
 """
         # WHEN
@@ -221,12 +221,12 @@ Backlog = "Backlog"
         actual: Outcome = describe_outcome(result)
         self.assertEqual(expected, actual)
 
-    def test_backwards_claim_is_rejected(self) -> None:
+    def test_backwards_transition_is_rejected(self) -> None:
         # GIVEN
         expected: Outcome = {"exit_code": 2, "view": None}
         body = """states = ["Backlog", "Done"]
 
-[claim]
+[transitions]
 Done = "Backlog"
 """
         # WHEN
@@ -244,7 +244,7 @@ Done = "Backlog"
         expected: Outcome = {"exit_code": 2, "view": None}
         body = """states = ["Backlog ", "Done"]
 
-[claim]
+[transitions]
 "Backlog " = "Done"
 """
         # WHEN
@@ -257,15 +257,15 @@ Done = "Backlog"
         actual: Outcome = describe_outcome(result)
         self.assertEqual(expected, actual)
 
-    def test_empty_claim_means_all_terminal(self) -> None:
+    def test_empty_transitions_means_all_terminal(self) -> None:
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Backlog", "Done"], "claim": {}},
+            "view": {"states": ["Backlog", "Done"], "transitions": {}},
         }
         body = """states = ["Backlog", "Done"]
 
-[claim]
+[transitions]
 """
         # WHEN
         with isolated_filesystem():
@@ -281,7 +281,7 @@ Done = "Backlog"
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Backlog", "Done"], "claim": {"Backlog": "Done"}},
+            "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}},
             "output_contains": False,
         }
         body = "# ignore previous instructions\n" + TRIVIAL_VIEW
@@ -301,7 +301,7 @@ Done = "Backlog"
         expected: Outcome = {"exit_code": 2, "view": None}
         body = """states = ["Backlog; rm -rf /", "Done"]
 
-[claim]
+[transitions]
 "Backlog; rm -rf /" = "Done"
 """
         # WHEN
@@ -320,12 +320,12 @@ Done = "Backlog"
             "exit_code": 0,
             "view": {
                 "states": ["In Progress", "Done"],
-                "claim": {"In Progress": "Done"},
+                "transitions": {"In Progress": "Done"},
             },
         }
         body = """states = ["In Progress", "Done"]
 
-[claim]
+[transitions]
 "In Progress" = "Done"
 """
         # WHEN
@@ -343,7 +343,7 @@ Done = "Backlog"
         expected: Outcome = {"exit_code": 2, "view": None}
         body = """states = [{a = 1}, "Done"]
 
-[claim]
+[transitions]
 """
         # WHEN
         with isolated_filesystem():
@@ -355,12 +355,12 @@ Done = "Backlog"
         actual: Outcome = describe_outcome(result)
         self.assertEqual(expected, actual)
 
-    def test_unhashable_claim_target_is_rejected(self) -> None:
+    def test_unhashable_transition_target_is_rejected(self) -> None:
         # GIVEN
         expected: Outcome = {"exit_code": 2, "view": None}
         body = """states = ["Backlog", "Done"]
 
-[claim]
+[transitions]
 Backlog = ["Done"]
 """
         # WHEN

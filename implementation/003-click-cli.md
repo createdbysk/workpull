@@ -32,7 +32,7 @@
 Run: `python scripts/dev.py test`
 
 - Describe in an isolated filesystem: exit 0, TOML parses to
-  Backlog and Done, claim Backlog -> Done.
+  Backlog and Done, transition Backlog -> Done.
 - `--help` lists describe, exit 0.
 - `--version` prints 0.1.0, exit 0.
 

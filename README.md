@@ -7,7 +7,7 @@ states and transitions. Workpull never assumes them.
 ## Current scope
 
 Only `describe` is available. It returns a backend's states and
-claim transition as TOML. Ready and claim are not available yet.
+transition as TOML. Ready and claim are not available yet.
 Do not use them, and do not invent their commands.
 
 ## Install
@@ -37,7 +37,7 @@ Output:
 ```toml
 states = ["Backlog", "Done"]
 
-[claim]
+[transitions]
 "Backlog" = "Done"
 ```
 
@@ -53,7 +53,7 @@ Output:
 ```toml
 states = ["Open", "Closed"]
 
-[claim]
+[transitions]
 "Open" = "Closed"
 ```
 
@@ -67,11 +67,11 @@ Write a hook command and set it in the environment, for example
 `DESCRIBE_HOOK`. Hook commands are in canonical POSIX form, on
 every platform: POSIX quoting, forward slashes for paths.
 The hook's stdout must be TOML with exactly
-`states`, a non-empty list of unique state names, and a `[claim]`
-table mapping each claimable state to a later state in that list.
+`states`, a non-empty list of unique state names, and a `[transitions]`
+table mapping each transition state to a later state in that list.
 State names use letters, digits, space, hyphen, or underscore
-only. A state with no outgoing claim transition is terminal.
-An empty claim table means every state is terminal.
+only. A state with no outgoing transition is terminal.
+An empty transitions table means every state is terminal.
 Hooks are operator-trusted code: they run with no shell, their
 output is parsed and schema-validated, never evaluated, and
 printed output must still be treated as untrusted text by the
