@@ -109,9 +109,11 @@ def cmd_type(_args):
 def cmd_lint(_args):
     pymarkdown = shutil.which("pymarkdown")
     if not pymarkdown:
-        venv_pymarkdown = venv_python().parent / "pymarkdown"
-        if venv_pymarkdown.exists():
-            pymarkdown = str(venv_pymarkdown)
+        for name in ("pymarkdown", "pymarkdown.exe"):
+            venv_pymarkdown = venv_python().parent / name
+            if venv_pymarkdown.exists():
+                pymarkdown = str(venv_pymarkdown)
+                break
     if not pymarkdown:
         print(
             "error: pymarkdown not found. Run: python scripts/dev.py setup",
