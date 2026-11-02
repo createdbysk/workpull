@@ -1,9 +1,9 @@
-# Design 005 — Claim
+# Design 005 — Claim ticket
 
 ## Hook interface
 
-- The claim hook is an environment variable, not a CLI parameter:
-  `CLAIM_HOOK` holds the command to run.
+- The claim ticket hook is an environment variable, not a
+  CLI parameter: `CLAIM_TICKET_HOOK` holds the command to run.
 - That command is in canonical POSIX form, on every platform:
   POSIX quoting, forward slashes for paths. The CLI parses it
   once with POSIX shlex, to a list, and passes that list to
@@ -12,9 +12,9 @@
 - The CLI runs that command with no shell.
 - Context is passed to a hook only through environment variables,
   never by interpolating values into the command string.
-- The item id is a CLI argument, opaque to the CLI. The CLI
-  passes it to the hook only as `WORKPULL_ITEM_ID`. The CLI
-  does not interpret it, and the backend validates it.
+- The state is a CLI argument. The CLI passes it to the hook
+  only as `WORKPULL_STATE`. The CLI does not interpret it,
+  and the backend validates it.
 - Hook commands come only from environment set by the operator,
   never from backend output, a ticket, or a backend-controlled file.
 - Actor identity is the hook's own operator context. Workpull
@@ -22,26 +22,30 @@
   from its operator environment and backend credentials, and
   enforces the mutex on that basis.
 
-## Claim result
+## Claim ticket result
 
-- The claim hook produces no output contract. The CLI does
-  not parse hook stdout, and does not validate a state or a
-  color.
+- The hook picks the ticket. The caller gives the state,
+  not the ticket. The hook returns the ticket it claimed,
+  as a single ticket id on stdout.
 - Hook exit 0 means the mutex is acquired. The CLI exits 0
-  and prints nothing.
-- Hook exit non-zero means the mutex is not acquired. The
-  CLI preserves that exit code, and prints nothing invented.
-- A missing claim hook means no claim. The CLI exits 2, and
-  no claim is invented.
-- Claim itself does not move a ticket, does not change its
-  state, and does not change its color. It only acquires
+  and prints the ticket id returned by the hook, and nothing
+  else.
+- Hook exit non-zero means no ticket is claimed. The CLI
+  preserves that exit code, and prints no ticket id.
+- A missing claim ticket hook means no claim. The CLI exits 2,
+  and no claim is invented.
+- The CLI does not validate a state or a color. It only
+  forwards the hook's ticket id on success, and its exit
+  code on failure.
+- Claim ticket itself does not move a ticket, does not change
+  its state, and does not change its color. It only acquires
   the mutex that gives the claiming actor the ability to
   change its color.
-- Claim ending is not part of the claim command. A ticket
-  moving, an actor releasing, and an actor going away are
-  backend actions, and a release command is a separate
-  operation. The claim command sets no timeout and no
-  heartbeat.
+- Claim ending is not part of the claim ticket command. A
+  ticket moving, an actor releasing, and an actor going away
+  are backend actions, and a release command is a separate
+  operation. The claim ticket command sets no timeout and
+  no heartbeat.
 
 ## Sanitization and trust
 
@@ -57,15 +61,18 @@
 ## SOLID mapping
 
 - Single responsibility: the CLI runs a hook and forwards its
-  exit code. It knows no backend, no mutex store, and no color
+  result. It knows no backend, no mutex store, and no color
   logic. A hook talks to its backend only. It knows no pull logic.
 - Open/closed: a new backend is a new hook command, no CLI change.
   A new hook is a new environment variable, not a change to
   existing hooks.
 - Liskov substitution: any hook following the contract, exit 0
-  means acquired, non-zero means not acquired, can replace any
-  other hook.
+  means acquired and stdout is the claimed ticket id, non-zero
+  means not acquired, can replace any other hook.
 - Interface segregation: hooks are separate per operation.
-  `CLAIM_HOOK` is for claim only. `DESCRIBE_HOOK` is unchanged.
+  `CLAIM_TICKET_HOOK` is for claim ticket only.
+  `DESCRIBE_HOOK` is unchanged. A claim column command is a
+  separate future command, with its own hook, not part of
+  this design.
 - Dependency inversion: the CLI depends on the hook contract,
   not on a concrete backend. Backend details live in the hook.
