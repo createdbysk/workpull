@@ -39,7 +39,8 @@ Describe tests run through Click's runner, in an isolated
 filesystem.
 
 - Happy path: mock hook prints Backlog/Done, CLI exit 0, output
-  parses as TOML with states Backlog and Done, transition Backlog -> Done.
+  parses as TOML with states Backlog and Done, transition Backlog -> Done,
+  and wip_limits Backlog and Done unlimited.
 - Missing hook: non-zero, no invented output.
 - Failing hook: non-zero, no invented output.
 - Invalid TOML output: non-zero.
@@ -71,4 +72,8 @@ states = ["Backlog", "Done"]
 
 [transitions]
 "Backlog" = "Done"
+
+[wip_limits]
+Backlog = inf
+Done = inf
 ```

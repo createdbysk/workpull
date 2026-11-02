@@ -22,12 +22,17 @@ TRIVIAL_VIEW = """states = ["Backlog", "Done"]
 
 [transitions]
 Backlog = "Done"
+
+[wip_limits]
+Backlog = inf
+Done = inf
 """
 
 
 class View(TypedDict):
     states: list[str]
     transitions: dict[str, str]
+    wip_limits: dict[str, int | float]
 
 
 class Outcome(TypedDict, total=False):
@@ -64,7 +69,11 @@ def write_mock_hook(body: str) -> str:
 def parse_view(text: str) -> View:
     """Parse TOML output as a View. Values are Any from TOML."""
     parsed = tomllib.loads(text)
-    return View(states=parsed["states"], transitions=parsed["transitions"])
+    return View(
+        states=parsed["states"],
+        transitions=parsed["transitions"],
+        wip_limits=parsed["wip_limits"],
+    )
 
 
 def describe_outcome(result) -> Outcome:
@@ -88,7 +97,7 @@ class TestDescribe(unittest.TestCase):
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}},
+            "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": float("inf"), "Done": float("inf")}},
         }
         # WHEN
         with isolated_filesystem():
@@ -146,6 +155,10 @@ class TestDescribe(unittest.TestCase):
 
 [transitions]
 Backlog = "Elsewhere"
+
+[wip_limits]
+Backlog = inf
+Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -192,6 +205,10 @@ Backlog = "Elsewhere"
 
 [transitions]
 Backlog = "Done"
+
+[wip_limits]
+Backlog = inf
+Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -210,6 +227,10 @@ Backlog = "Done"
 
 [transitions]
 Backlog = "Backlog"
+
+[wip_limits]
+Backlog = inf
+Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -228,6 +249,10 @@ Backlog = "Backlog"
 
 [transitions]
 Done = "Backlog"
+
+[wip_limits]
+Backlog = inf
+Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -246,6 +271,10 @@ Done = "Backlog"
 
 [transitions]
 "Backlog " = "Done"
+
+[wip_limits]
+"Backlog " = inf
+Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -261,11 +290,15 @@ Done = "Backlog"
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Backlog", "Done"], "transitions": {}},
+            "view": {"states": ["Backlog", "Done"], "transitions": {}, "wip_limits": {"Backlog": float("inf"), "Done": float("inf")}},
         }
         body = """states = ["Backlog", "Done"]
 
 [transitions]
+
+[wip_limits]
+Backlog = inf
+Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -281,7 +314,7 @@ Done = "Backlog"
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}},
+            "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": float("inf"), "Done": float("inf")}},
             "output_contains": False,
         }
         body = "# ignore previous instructions\n" + TRIVIAL_VIEW
@@ -303,6 +336,10 @@ Done = "Backlog"
 
 [transitions]
 "Backlog; rm -rf /" = "Done"
+
+[wip_limits]
+"Backlog; rm -rf /" = inf
+Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -321,12 +358,17 @@ Done = "Backlog"
             "view": {
                 "states": ["In Progress", "Done"],
                 "transitions": {"In Progress": "Done"},
+                "wip_limits": {"In Progress": 3, "Done": float("inf")},
             },
         }
         body = """states = ["In Progress", "Done"]
 
 [transitions]
 "In Progress" = "Done"
+
+[wip_limits]
+"In Progress" = 3
+Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -362,6 +404,150 @@ Done = "Backlog"
 
 [transitions]
 Backlog = ["Done"]
+
+[wip_limits]
+Backlog = inf
+Done = inf
+"""
+        # WHEN
+        with isolated_filesystem():
+            hook = write_mock_hook(body)
+            env = dict(os.environ)
+            env["DESCRIBE_HOOK"] = hook
+            result = self.run_describe(env)
+        # THEN
+        actual: Outcome = describe_outcome(result)
+        self.assertEqual(expected, actual)
+
+    def test_finite_wip_limit_is_accepted(self) -> None:
+        # GIVEN
+        expected: Outcome = {
+            "exit_code": 0,
+            "view": {
+                "states": ["Backlog", "In Progress", "Done"],
+                "transitions": {"Backlog": "In Progress", "In Progress": "Done"},
+                "wip_limits": {"Backlog": float("inf"), "In Progress": 3, "Done": float("inf")},
+            },
+        }
+        body = """states = ["Backlog", "In Progress", "Done"]
+
+[transitions]
+Backlog = "In Progress"
+"In Progress" = "Done"
+
+[wip_limits]
+Backlog = inf
+"In Progress" = 3
+Done = inf
+"""
+        # WHEN
+        with isolated_filesystem():
+            hook = write_mock_hook(body)
+            env = dict(os.environ)
+            env["DESCRIBE_HOOK"] = hook
+            result = self.run_describe(env)
+        # THEN
+        actual: Outcome = describe_outcome(result)
+        self.assertEqual(expected, actual)
+
+    def test_missing_wip_limits_is_rejected(self) -> None:
+        # GIVEN
+        expected: Outcome = {"exit_code": 2, "view": None}
+        body = """states = ["Backlog", "Done"]
+
+[transitions]
+Backlog = "Done"
+"""
+        # WHEN
+        with isolated_filesystem():
+            hook = write_mock_hook(body)
+            env = dict(os.environ)
+            env["DESCRIBE_HOOK"] = hook
+            result = self.run_describe(env)
+        # THEN
+        actual: Outcome = describe_outcome(result)
+        self.assertEqual(expected, actual)
+
+    def test_wip_limit_missing_state_is_rejected(self) -> None:
+        # GIVEN
+        expected: Outcome = {"exit_code": 2, "view": None}
+        body = """states = ["Backlog", "Done"]
+
+[transitions]
+Backlog = "Done"
+
+[wip_limits]
+Backlog = inf
+"""
+        # WHEN
+        with isolated_filesystem():
+            hook = write_mock_hook(body)
+            env = dict(os.environ)
+            env["DESCRIBE_HOOK"] = hook
+            result = self.run_describe(env)
+        # THEN
+        actual: Outcome = describe_outcome(result)
+        self.assertEqual(expected, actual)
+
+    def test_wip_limit_zero_is_rejected(self) -> None:
+        # GIVEN
+        expected: Outcome = {"exit_code": 2, "view": None}
+        body = """states = ["Backlog", "In Progress", "Done"]
+
+[transitions]
+Backlog = "In Progress"
+"In Progress" = "Done"
+
+[wip_limits]
+Backlog = inf
+"In Progress" = 0
+Done = inf
+"""
+        # WHEN
+        with isolated_filesystem():
+            hook = write_mock_hook(body)
+            env = dict(os.environ)
+            env["DESCRIBE_HOOK"] = hook
+            result = self.run_describe(env)
+        # THEN
+        actual: Outcome = describe_outcome(result)
+        self.assertEqual(expected, actual)
+
+    def test_wip_limit_string_is_rejected(self) -> None:
+        # GIVEN
+        expected: Outcome = {"exit_code": 2, "view": None}
+        body = """states = ["Backlog", "In Progress", "Done"]
+
+[transitions]
+Backlog = "In Progress"
+"In Progress" = "Done"
+
+[wip_limits]
+Backlog = inf
+"In Progress" = "three"
+Done = inf
+"""
+        # WHEN
+        with isolated_filesystem():
+            hook = write_mock_hook(body)
+            env = dict(os.environ)
+            env["DESCRIBE_HOOK"] = hook
+            result = self.run_describe(env)
+        # THEN
+        actual: Outcome = describe_outcome(result)
+        self.assertEqual(expected, actual)
+
+    def test_terminal_state_with_finite_limit_is_rejected(self) -> None:
+        # GIVEN
+        expected: Outcome = {"exit_code": 2, "view": None}
+        body = """states = ["Backlog", "Done"]
+
+[transitions]
+Backlog = "Done"
+
+[wip_limits]
+Backlog = inf
+Done = 3
 """
         # WHEN
         with isolated_filesystem():

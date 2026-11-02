@@ -22,6 +22,7 @@ ADAPTER = ROOT / "plugins" / "github" / "describe.py"
 class View(TypedDict):
     states: list[str]
     transitions: dict[str, str]
+    wip_limits: dict[str, int | float]
 
 
 class Outcome(TypedDict, total=False):
@@ -33,7 +34,11 @@ class Outcome(TypedDict, total=False):
 def parse_view(text: str) -> View:
     """Parse TOML output as a View. Values are Any from TOML."""
     parsed = tomllib.loads(text)
-    return View(states=parsed["states"], transitions=parsed["transitions"])
+    return View(
+        states=parsed["states"],
+        transitions=parsed["transitions"],
+        wip_limits=parsed["wip_limits"],
+    )
 
 
 def run_cli(env: dict[str, str]):
@@ -53,7 +58,7 @@ class TestGitHubDescribe(unittest.TestCase):
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}},
+            "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": float("inf"), "Closed": float("inf")}},
         }
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = f"{Path(sys.executable).as_posix()} {ADAPTER.as_posix()}"
@@ -70,7 +75,7 @@ class TestGitHubDescribe(unittest.TestCase):
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}},
+            "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": float("inf"), "Closed": float("inf")}},
             "output_contains": False,
         }
         # WHEN

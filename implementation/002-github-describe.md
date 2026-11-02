@@ -18,7 +18,7 @@
 - `tests/test_github_describe.py`, unittest, 2 tests:
   1. CLI via the GitHub adapter returns states Open, Closed
      and transition Open -> Closed.
-  2. Adapter direct output is exactly states and transitions, with
+  2. Adapter direct output is exactly states, transitions, and wip_limits, with
      no Backlog state in it.
 - No live GitHub call is made in any test.
 

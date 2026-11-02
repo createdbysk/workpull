@@ -34,6 +34,7 @@ requirement 001: claim no longer moves a ticket.
 - A transition happens only if the next state is below
   its WIP limit. If the next state is at its limit, the
   ticket stays, shown yellow, in its current state.
+- WIP limits are provided by describe, for each state.
 - Done is infinite. Done is not a working state, it is
   proof of doneness. In reality it could be just trash,
   except humans want that proof. A ticket closes at Done,

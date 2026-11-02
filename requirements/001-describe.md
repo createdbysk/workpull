@@ -18,6 +18,9 @@ Describe is therefore the first command, before ready and claim.
   which state a transition moves an item from, and which
   state it moves it to. Claim does not move an item; see
   requirement 004.
+- The WIP limit of each state, as defined by the backend.
+  A finite limit is a positive integer. Unlimited is `inf`.
+  Done is unlimited.
 - A state with no outgoing transition is terminal in this
   system.
 
