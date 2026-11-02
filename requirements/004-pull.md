@@ -40,8 +40,8 @@ requirement 001: claim no longer moves a ticket.
   except humans want that proof. A ticket closes at Done,
   so there can be no limit to the number of closed
   tickets, unless a system is built that trashes Done
-  tickets. A transition into Done is never blocked by
-  capacity.
+  tickets. Done is not listed in wip_limits. A transition
+  into Done is never blocked by capacity.
 - A state that looks like an endpoint is not Done if it
   still has work after it. Such a last working state
   still has a WIP limit, and its tickets then move to

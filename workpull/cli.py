@@ -72,9 +72,10 @@ def validate_describe(view: object) -> str | None:
       list, by list position. A self-loop, or a target at or
       before the source, is rejected. An empty transitions table is
       allowed, and means every state is terminal.
-    - wip_limits: table with exactly one entry per state. Each
-      value is a positive integer, or inf for unlimited.
-      A terminal state must be unlimited.
+    - wip_limits: table with exactly one entry per non-terminal
+      state, and no entry for a terminal state. Each value is
+      a positive integer, or inf for unlimited. Terminal states
+      are unlimited by definition, and are not listed.
     """
     if not isinstance(view, dict):
         return "describe output is not a TOML document"
@@ -111,8 +112,12 @@ def validate_describe(view: object) -> str | None:
     wip_limits = view["wip_limits"]
     if not isinstance(wip_limits, dict):
         return "wip_limits must be a table"
-    if set(wip_limits) != set(states):
-        return "wip_limits must contain exactly one entry per state"
+    non_terminal = set(transitions)
+    terminal = set(states) - non_terminal
+    if set(wip_limits) & terminal:
+        return "terminal state must not be in wip_limits"
+    if set(wip_limits) != non_terminal:
+        return "wip_limits must contain exactly one entry per non-terminal state"
     for state, limit in wip_limits.items():
         if isinstance(limit, bool):
             return f"invalid wip_limit: {state!r} -> {limit!r}"
@@ -121,10 +126,6 @@ def validate_describe(view: object) -> str | None:
                 return f"invalid wip_limit: {state!r} -> {limit!r}"
         elif not isinstance(limit, int) or limit < 1:
             return f"invalid wip_limit: {state!r} -> {limit!r}"
-    terminal = set(states) - set(transitions)
-    for state in terminal:
-        if wip_limits[state] != float("inf"):
-            return f"terminal state must be unlimited: {state!r}"
     return None
 
 
@@ -143,9 +144,10 @@ def format_describe(view: dict[str, Any]) -> str:
     lines.append("")
     lines.append("[wip_limits]")
     for state in view["states"]:
-        limit = view["wip_limits"][state]
-        value = "inf" if limit == float("inf") else str(limit)
-        lines.append(f'"{state}" = {value}')
+        if state in view["transitions"]:
+            limit = view["wip_limits"][state]
+            value = "inf" if limit == float("inf") else str(limit)
+            lines.append(f'"{state}" = {value}')
     return "\n".join(lines)
 
 

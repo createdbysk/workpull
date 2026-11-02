@@ -21,10 +21,11 @@
   the backend, not written in advance.
 - It contains `states`, a list of state names, a `[transitions]`
   table, mapping a current state to the state a transition moves it to,
-  and a `[wip_limits]` table, mapping each state to its WIP limit.
-  A finite limit is a positive integer. Unlimited is `inf`.
-  Done is unlimited, so a transition into Done is never blocked
-  by capacity.
+  and a `[wip_limits]` table, mapping each non-terminal state
+  to its WIP limit. A finite limit is a positive integer.
+  Unlimited is `inf`. Terminal states are not listed in
+  wip_limits; they are unlimited by definition, so a transition
+  into Done is never blocked by capacity.
 - For the trivial system:
   - states: Backlog, Done
   - transition: Backlog -> Done
@@ -34,10 +35,9 @@
 Before a generic view is returned, it is validated:
 
 - It must contain exactly states, transitions, and wip_limits.
-- wip_limits must contain exactly one entry per state. Each
-  value must be a positive integer, or `inf` for unlimited.
-  A terminal state must be unlimited, otherwise it would
-  fill up and block everything behind it forever.
+- wip_limits must contain exactly one entry per non-terminal
+  state, and no entry for a terminal state. Each value must
+  be a positive integer, or `inf` for unlimited.
 - States must be a non-empty list of unique, valid state names.
 - A valid state name contains only letters, digits, space, hyphen,
   or underscore, with no leading or trailing whitespace, and not

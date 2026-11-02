@@ -58,7 +58,7 @@ class TestGitHubDescribe(unittest.TestCase):
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": float("inf"), "Closed": float("inf")}},
+            "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": float("inf")}},
         }
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = f"{Path(sys.executable).as_posix()} {ADAPTER.as_posix()}"
@@ -75,7 +75,7 @@ class TestGitHubDescribe(unittest.TestCase):
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": float("inf"), "Closed": float("inf")}},
+            "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": float("inf")}},
             "output_contains": False,
         }
         # WHEN

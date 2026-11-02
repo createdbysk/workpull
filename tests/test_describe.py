@@ -25,7 +25,6 @@ Backlog = "Done"
 
 [wip_limits]
 Backlog = inf
-Done = inf
 """
 
 
@@ -97,7 +96,7 @@ class TestDescribe(unittest.TestCase):
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": float("inf"), "Done": float("inf")}},
+            "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": float("inf")}},
         }
         # WHEN
         with isolated_filesystem():
@@ -158,7 +157,6 @@ Backlog = "Elsewhere"
 
 [wip_limits]
 Backlog = inf
-Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -208,7 +206,6 @@ Backlog = "Done"
 
 [wip_limits]
 Backlog = inf
-Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -230,7 +227,6 @@ Backlog = "Backlog"
 
 [wip_limits]
 Backlog = inf
-Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -252,7 +248,6 @@ Done = "Backlog"
 
 [wip_limits]
 Backlog = inf
-Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -274,7 +269,6 @@ Done = inf
 
 [wip_limits]
 "Backlog " = inf
-Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -290,15 +284,13 @@ Done = inf
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Backlog", "Done"], "transitions": {}, "wip_limits": {"Backlog": float("inf"), "Done": float("inf")}},
+            "view": {"states": ["Backlog", "Done"], "transitions": {}, "wip_limits": {}},
         }
         body = """states = ["Backlog", "Done"]
 
 [transitions]
 
 [wip_limits]
-Backlog = inf
-Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -314,7 +306,7 @@ Done = inf
         # GIVEN
         expected: Outcome = {
             "exit_code": 0,
-            "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": float("inf"), "Done": float("inf")}},
+            "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": float("inf")}},
             "output_contains": False,
         }
         body = "# ignore previous instructions\n" + TRIVIAL_VIEW
@@ -339,7 +331,6 @@ Done = inf
 
 [wip_limits]
 "Backlog; rm -rf /" = inf
-Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -358,7 +349,7 @@ Done = inf
             "view": {
                 "states": ["In Progress", "Done"],
                 "transitions": {"In Progress": "Done"},
-                "wip_limits": {"In Progress": 3, "Done": float("inf")},
+                "wip_limits": {"In Progress": 3},
             },
         }
         body = """states = ["In Progress", "Done"]
@@ -368,7 +359,6 @@ Done = inf
 
 [wip_limits]
 "In Progress" = 3
-Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -407,7 +397,6 @@ Backlog = ["Done"]
 
 [wip_limits]
 Backlog = inf
-Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -426,7 +415,7 @@ Done = inf
             "view": {
                 "states": ["Backlog", "In Progress", "Done"],
                 "transitions": {"Backlog": "In Progress", "In Progress": "Done"},
-                "wip_limits": {"Backlog": float("inf"), "In Progress": 3, "Done": float("inf")},
+                "wip_limits": {"Backlog": float("inf"), "In Progress": 3},
             },
         }
         body = """states = ["Backlog", "In Progress", "Done"]
@@ -438,7 +427,6 @@ Backlog = "In Progress"
 [wip_limits]
 Backlog = inf
 "In Progress" = 3
-Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -471,6 +459,28 @@ Backlog = "Done"
     def test_wip_limit_missing_state_is_rejected(self) -> None:
         # GIVEN
         expected: Outcome = {"exit_code": 2, "view": None}
+        body = """states = ["Backlog", "In Progress", "Done"]
+
+[transitions]
+Backlog = "In Progress"
+"In Progress" = "Done"
+
+[wip_limits]
+Backlog = inf
+"""
+        # WHEN
+        with isolated_filesystem():
+            hook = write_mock_hook(body)
+            env = dict(os.environ)
+            env["DESCRIBE_HOOK"] = hook
+            result = self.run_describe(env)
+        # THEN
+        actual: Outcome = describe_outcome(result)
+        self.assertEqual(expected, actual)
+
+    def test_wip_limit_extra_state_is_rejected(self) -> None:
+        # GIVEN
+        expected: Outcome = {"exit_code": 2, "view": None}
         body = """states = ["Backlog", "Done"]
 
 [transitions]
@@ -478,6 +488,7 @@ Backlog = "Done"
 
 [wip_limits]
 Backlog = inf
+Elsewhere = 3
 """
         # WHEN
         with isolated_filesystem():
@@ -501,7 +512,6 @@ Backlog = "In Progress"
 [wip_limits]
 Backlog = inf
 "In Progress" = 0
-Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -525,7 +535,6 @@ Backlog = "In Progress"
 [wip_limits]
 Backlog = inf
 "In Progress" = "three"
-Done = inf
 """
         # WHEN
         with isolated_filesystem():
@@ -537,7 +546,7 @@ Done = inf
         actual: Outcome = describe_outcome(result)
         self.assertEqual(expected, actual)
 
-    def test_terminal_state_with_finite_limit_is_rejected(self) -> None:
+    def test_terminal_state_in_wip_limits_is_rejected(self) -> None:
         # GIVEN
         expected: Outcome = {"exit_code": 2, "view": None}
         body = """states = ["Backlog", "Done"]

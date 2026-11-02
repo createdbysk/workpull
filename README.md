@@ -42,7 +42,6 @@ states = ["Backlog", "Done"]
 
 [wip_limits]
 Backlog = inf
-Done = inf
 ```
 
 ## Describe, with the GitHub issues mock
@@ -62,7 +61,6 @@ states = ["Open", "Closed"]
 
 [wip_limits]
 Open = inf
-Closed = inf
 ```
 
 The GitHub mock validates the shape of the describe contract.
@@ -77,8 +75,9 @@ every platform: POSIX quoting, forward slashes for paths.
 The hook's stdout must be TOML with exactly
 `states`, a non-empty list of unique state names, a `[transitions]`
 table mapping each transition state to a later state in that list,
-and a `[wip_limits]` table with one entry per state: a positive
-integer for a finite limit, or `inf` for unlimited. Done is unlimited.
+and a `[wip_limits]` table with one entry per non-terminal state:
+a positive integer for a finite limit, or `inf` for unlimited.
+Terminal states are not listed; they are unlimited by definition.
 State names use letters, digits, space, hyphen, or underscore
 only. A state with no outgoing transition is terminal.
 An empty transitions table means every state is terminal.
