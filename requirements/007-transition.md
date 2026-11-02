@@ -8,9 +8,11 @@ that state has capacity.
 ## Transition
 
 - A transition moves a ticket to the next state.
-- A transition happens only if the next state is below
-  its WIP limit. If the next state is at its limit, the
-  ticket stays, shown yellow, in its current state.
+- A transition happens when a slot comes open in the next
+  state, and the next state is below its WIP limit, as in
+  requirement 004. The system moves a green ticket from
+  the previous state. If the next state is at its limit,
+  the ticket stays, shown green, in its current state.
 - WIP limits are provided by describe, for each
   non-terminal state. Terminal states are not listed
   in wip_limits; they are unlimited by definition.
