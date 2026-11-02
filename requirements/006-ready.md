@@ -21,5 +21,3 @@ signal changes.
 - A green ticket whose transition is blocked by the next
   state's WIP limit stays in its current state, shown
   green, and still counts against that state's WIP limit.
-- Only a worker with the role for that state can mark a
-  ticket green in that state; see requirement 009.
