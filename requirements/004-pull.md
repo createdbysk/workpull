@@ -42,9 +42,9 @@ requirement 001: claim no longer moves a ticket.
   tickets. A transition into Done is never blocked by
   capacity.
 - A state that looks like an endpoint is not Done if it
-  still has work after it. Pushed to prod is such a state:
-  it has a WIP limit, so prod pushes do not pile up, and
-  its tickets then move to Done, where they close.
+  still has work after it. Such a last working state
+  still has a WIP limit, and its tickets then move to
+  Done, where they close.
 
 ## Pull
 
