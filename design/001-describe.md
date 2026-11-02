@@ -78,7 +78,6 @@ Before a generic view is returned, it is validated:
   is the generic view, exit 0 means success, non-zero means
   unchanged, can replace any other hook.
 - Interface segregation: hooks are separate per operation.
-  Only `DESCRIBE_HOOK` is available. `READY_HOOK` and
-  `CLAIM_HOOK` are not available, and setting them has no effect.
+  `DESCRIBE_HOOK` is for describe only.
 - Dependency inversion: the CLI depends on the hook contract,
   not on a concrete backend. Backend details live in the hook.
