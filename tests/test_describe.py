@@ -49,11 +49,16 @@ def isolated_filesystem():
             os.chdir(old)
 
 
+def hook_command(script: str) -> str:
+    """Hook command in canonical POSIX form, on every platform."""
+    return f"{Path(sys.executable).as_posix()} {script}"
+
+
 def write_mock_hook(body: str) -> str:
     """Write a mock hook script in the current directory."""
     hook = Path("mock_describe.py")
     hook.write_text("import sys\nsys.stdout.write(" + repr(body) + ")\n")
-    return f"{sys.executable} mock_describe.py"
+    return hook_command("mock_describe.py")
 
 
 def parse_view(text: str) -> View:
@@ -115,7 +120,7 @@ class TestDescribe(unittest.TestCase):
             hook = Path("failing.py")
             hook.write_text("import sys\nsys.exit(3)\n")
             env = dict(os.environ)
-            env["DESCRIBE_HOOK"] = f"{sys.executable} failing.py"
+            env["DESCRIBE_HOOK"] = hook_command("failing.py")
             result = self.run_describe(env)
         # THEN
         actual: Outcome = describe_outcome(result)

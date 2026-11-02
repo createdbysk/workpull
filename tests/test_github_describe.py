@@ -56,7 +56,7 @@ class TestGitHubDescribe(unittest.TestCase):
             "view": {"states": ["Open", "Closed"], "claim": {"Open": "Closed"}},
         }
         env = dict(os.environ)
-        env["DESCRIBE_HOOK"] = f"{sys.executable} {ADAPTER}"
+        env["DESCRIBE_HOOK"] = f"{Path(sys.executable).as_posix()} {ADAPTER.as_posix()}"
         # WHEN
         result = run_cli(env)
         # THEN

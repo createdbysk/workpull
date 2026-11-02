@@ -4,6 +4,11 @@
 
 - The describe hook is an environment variable, not a CLI parameter:
   `DESCRIBE_HOOK` holds the command to run.
+- That command is in canonical POSIX form, on every platform:
+  POSIX quoting, forward slashes for paths. The CLI parses it
+  once with POSIX shlex, to a list, and passes that list to
+  subprocess, which converts it to the platform form. There
+  is no platform branch in the CLI for hook parsing.
 - The CLI runs that command, and its stdout is the generic view.
 - Context is passed to a hook only through environment variables,
   never by interpolating values into the command string.

@@ -12,9 +12,10 @@
 ## Files
 
 - `workpull/cli.py`
-  - `run_hook(hook_command)`: parses the hook with `shlex.split`,
-    runs it with `subprocess.run` and no shell, returns returncode,
-    stdout, and stderr.
+  - `run_hook(hook_command)`: parses the hook, in canonical
+    POSIX form, with `shlex.split` in POSIX mode, runs the
+    resulting list with `subprocess.run` and no shell, returns
+    returncode, stdout, and stderr.
   - `validate_describe(view)`: checks the parsed TOML document
     against the design schema, returns an error string or None.
   - `describe()`: reads `DESCRIBE_HOOK`, runs the hook, parses

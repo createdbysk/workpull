@@ -33,11 +33,16 @@ _STATE_NAME = re.compile(r"^[A-Za-z0-9 _-]+$")
 def run_hook(hook_command: str) -> tuple[int, str, str]:
     """Run a hook command, no shell. Returns (returncode, stdout, stderr).
 
+    The hook command is in canonical POSIX form, on every
+    platform: POSIX quoting, forward slashes for paths. It is
+    parsed once with POSIX shlex, to a list, and that list is
+    passed to subprocess, which converts it to the platform
+    form. There is no platform branch here.
     The hook is killed after 30 seconds, and that timeout is
     reported only as a generic hook failure.
     """
     try:
-        args = shlex.split(hook_command)
+        args = shlex.split(hook_command, posix=True)
     except ValueError as exc:
         return 2, "", f"invalid hook command: {exc}\n"
     if not args:

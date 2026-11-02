@@ -64,7 +64,9 @@ network call and no token, and it is not a live backend adapter.
 ## Add a backend
 
 Write a hook command and set it in the environment, for example
-`DESCRIBE_HOOK`. The hook's stdout must be TOML with exactly
+`DESCRIBE_HOOK`. Hook commands are in canonical POSIX form, on
+every platform: POSIX quoting, forward slashes for paths.
+The hook's stdout must be TOML with exactly
 `states`, a non-empty list of unique state names, and a `[claim]`
 table mapping each claimable state to a later state in that list.
 State names use letters, digits, space, hyphen, or underscore
