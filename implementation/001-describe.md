@@ -21,10 +21,8 @@
   - `describe()`: reads `DESCRIBE_HOOK`, runs the hook, parses
     stdout with `tomllib`, validates, prints the view on success,
     returns a non-zero exit code on failure.
-  - `main(argv)`: runs the Click group. With no arguments,
-    this is the real entry point. With arguments, the Click
-    exit code is returned.
-- `workpull/__main__.py`: entry point, `sys.exit(main())`.
+- `workpull/__main__.py`: entry point, calls `cli()`. No
+  programmatic path. Tests use Click's runner.
 - `workpull/__init__.py`: package marker.
 - `adapters/mock_describe.py`: mock describe hook, prints the
   trivial Backlog/Done TOML view.

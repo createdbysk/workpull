@@ -202,23 +202,3 @@ def describe() -> None:
         click.echo(f"invalid describe output: {error}", err=True)
         raise click.exceptions.Exit(2)
     click.echo(format_describe(view))
-
-
-def main(argv: list[str] | None = None) -> int:
-    """Entry point for `python -m workpull`.
-
-    With no arguments, this is the real entry point, and Click
-    handles exit codes itself. With arguments, this is a
-    programmatic call, and the Click exit code is returned.
-    """
-    if argv is None:
-        cli()
-        return 0
-    try:
-        result = cli.main(args=argv, prog_name="workpull", standalone_mode=False)
-    except click.exceptions.Exit as exc:
-        return exc.exit_code
-    except click.ClickException as exc:
-        exc.show()
-        return exc.exit_code
-    return result if isinstance(result, int) else 0
