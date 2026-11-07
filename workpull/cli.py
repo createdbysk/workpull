@@ -1,7 +1,9 @@
-"""workpull CLI: describe.
+"""workpull CLI: describe and claim-ticket.
 
 Run a hook command from the environment, validate its TOML
-output, print a normalized view. It knows no backend.
+output, print a normalized view. Claim a single ticket in
+a state, printing the ticket id the hook returns. It knows
+no backend.
 
 What this code guarantees, and what it does not:
 - Hook commands are parsed with shlex.split and run with no shell.
@@ -30,7 +32,9 @@ import click
 _STATE_NAME = re.compile(r"^[A-Za-z0-9 _-]+$")
 
 
-def run_hook(hook_command: str) -> tuple[int, str, str]:
+def run_hook(
+    hook_command: str, env: dict[str, str] | None = None
+) -> tuple[int, str, str]:
     """Run a hook command, no shell. Returns (returncode, stdout, stderr).
 
     The hook command is in canonical POSIX form, on every
@@ -47,13 +51,16 @@ def run_hook(hook_command: str) -> tuple[int, str, str]:
         return 2, "", f"invalid hook command: {exc}\n"
     if not args:
         return 2, "", "empty hook command\n"
+    hook_env = dict(os.environ)
+    if env:
+        hook_env.update(env)
     try:
         result = subprocess.run(
             args,
             capture_output=True,
             text=True,
             timeout=30,
-            env=dict(os.environ),
+            env=hook_env,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return 2, "", f"hook failed to run: {exc}\n"
@@ -161,7 +168,22 @@ def cli() -> None:
 @click.argument("state")
 def claim_ticket(state: str) -> None:
     """Claim a single ticket in a state."""
-    raise NotImplementedError
+    hook = os.environ.get("CLAIM_TICKET_HOOK")
+    if not hook:
+        click.echo("CLAIM_TICKET_HOOK is not set", err=True)
+        raise click.exceptions.Exit(2)
+    returncode, stdout, stderr = run_hook(hook, env={"WORKPULL_STATE": state})
+    if returncode != 0:
+        if stderr:
+            click.echo(stderr, err=True, nl=False)
+        else:
+            click.echo("claim-ticket hook failed", err=True)
+        raise click.exceptions.Exit(returncode or 1)
+    ticket_id = stdout.strip()
+    if not ticket_id:
+        click.echo("claim-ticket hook returned no ticket id", err=True)
+        raise click.exceptions.Exit(2)
+    click.echo(ticket_id)
 
 
 @cli.command()

@@ -54,6 +54,6 @@ not load a document for a later step while you are on an earlier one.
 
 ## Current scope
 
-Only describe is available. Do not use ready or claim, and do
-not invent their commands, until their requirement, design, and
-implementation documents exist.
+Only describe and claim-ticket are available. Do not use
+ready, and do not invent its command, until its requirement,
+design, and implementation documents exist.
