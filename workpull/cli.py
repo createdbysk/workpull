@@ -168,7 +168,10 @@ def cli() -> None:
 @click.argument("state")
 def claim_ticket(state: str) -> None:
     """Claim a single ticket in a state."""
-    hook = os.environ["CLAIM_TICKET_HOOK"]
+    hook = os.environ.get("CLAIM_TICKET_HOOK")
+    if not hook:
+        click.echo("CLAIM_TICKET_HOOK is not set", err=True)
+        raise click.exceptions.Exit(2)
     _, stdout, _ = run_hook(hook, env={"WORKPULL_STATE": state})
     click.echo(stdout.strip())
 

@@ -18,12 +18,12 @@
     returns returncode, stdout, and stderr. `env`, when given,
     is merged over the process environment for the hook only.
     Describe calls it with no extra env.
-  - `claim_ticket(state)`: reads `CLAIM_TICKET_HOOK`, runs the
-    hook with `WORKPULL_STATE` set to the state argument,
-    prints the ticket id returned on stdout. That is all the
-    code the happy path test requires. Missing hook, failing
-    hook, and empty ticket id are not handled yet. No code
-    for them is written until a test requires it.
+  - `claim_ticket(state)`: reads `CLAIM_TICKET_HOOK`, returns
+    exit 2 with no ticket invented when the hook is missing,
+    runs the hook with `WORKPULL_STATE` set to the state
+    argument, prints the ticket id returned on stdout.
+    Failing hook and empty ticket id are not handled yet. No
+    code for them is written until a test requires it.
 - `tests/test_claim_ticket.py`: tests, driving the CLI through
   Click's runner, with an explicit environment per test.
 - `tests/test_workpull_cli.py`: top level help test, listing
@@ -43,7 +43,9 @@ filesystem.
 - Top level `--help`: exit 0, lists `claim-ticket` and
   `describe`, in `tests/test_workpull_cli.py`.
 
-Missing hook, failing hook, and empty ticket id are not
-handled in the code, and are not yet tested. To add any of
-them, write a red test first, then the code that makes that
-test pass. No defensive code without a test justifying it.
+- Missing hook: no hook set, CLI exit 2, no ticket invented.
+
+Failing hook and empty ticket id are not handled in the
+code, and are not yet tested. To add either, write a red
+test first, then the code that makes that test pass. No
+defensive code without a test justifying it.
