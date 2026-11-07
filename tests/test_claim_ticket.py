@@ -78,6 +78,18 @@ class TestClaimTicket(unittest.TestCase):
         actual: Outcome = claim_ticket_outcome(result)
         self.assertEqual(expected, actual)
 
+    def test_missing_hook(self) -> None:
+        # GIVEN
+        expected: Outcome = {"exit_code": 2, "ticket_id": None}
+        # WHEN
+        with isolated_filesystem():
+            env = dict(os.environ)
+            env.pop("CLAIM_TICKET_HOOK", None)
+            result = self.run_claim_ticket("Develop", env)
+        # THEN
+        actual: Outcome = claim_ticket_outcome(result)
+        self.assertEqual(expected, actual)
+
     def test_claim_ticket_help(self) -> None:
         # GIVEN
         expected: Outcome = {"exit_code": 0, "output_contains": True}
