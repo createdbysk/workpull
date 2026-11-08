@@ -28,13 +28,11 @@ import tomllib
 from typing import Any
 
 import click
-from typing import Protocol
+from typing import Callable
 
-
-class RunHook(Protocol):
-    def __call__(
-        self, hook_command: str, env: dict[str, str] | None = None
-    ) -> tuple[int, str, str]: ...
+RunHook = Callable[
+    [str, dict[str, str] | None], tuple[int, str, str]
+]
 
 _STATE_NAME = re.compile(r"^[A-Za-z0-9 _-]+$")
 
@@ -171,7 +169,7 @@ def claim_ticket(state: str, run_hook_fn: RunHook) -> None:
     if not hook:
         click.echo("CLAIM_TICKET_HOOK is not set", err=True)
         raise click.exceptions.Exit(2)
-    returncode, stdout, _ = run_hook_fn(hook, env={"WORKPULL_STATE": state})
+    returncode, stdout, _ = run_hook_fn(hook, {"WORKPULL_STATE": state})
     if returncode != 0:
         raise click.exceptions.Exit(returncode)
     ticket_id = stdout.strip()
@@ -187,7 +185,7 @@ def describe(run_hook_fn: RunHook) -> None:
     if not hook:
         click.echo("DESCRIBE_HOOK is not set", err=True)
         raise click.exceptions.Exit(2)
-    returncode, stdout, stderr = run_hook_fn(hook)
+    returncode, stdout, stderr = run_hook_fn(hook, None)
     if returncode != 0:
         if stderr:
             click.echo(stderr, err=True, nl=False)
