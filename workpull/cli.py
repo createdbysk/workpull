@@ -227,9 +227,18 @@ def cli(ctx: click.Context) -> None:
 
 def adopt(ticket: str, run_hook_fn: RunHook) -> None:
     """Adopt a ticket."""
-    hook = os.environ["ADOPT_HOOK"]
+    hook = os.environ.get("ADOPT_HOOK")
+    if not hook:
+        click.echo("ADOPT_HOOK is not set", err=True)
+        raise click.exceptions.Exit(2)
     result = run_hook_fn(hook, {"WORKPULL_TICKET": ticket})
-    click.echo(result.stdout.strip())
+    if result.returncode != 0:
+        raise click.exceptions.Exit(result.returncode)
+    ticket_id = result.stdout.strip()
+    if not ticket_id:
+        click.echo("adopt hook returned no ticket id", err=True)
+        raise click.exceptions.Exit(2)
+    click.echo(ticket_id)
 
 
 def prioritize(

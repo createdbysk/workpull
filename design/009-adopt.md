@@ -54,6 +54,10 @@
   that exit code, and prints no ticket id. That covers
   a ticket already in progress, a ticket already
   adopted, and a race, as a hook failure.
+- Hook exit 0 with empty stdout means not adopted. Exit
+  0 means adopted with one ticket id, so a hook that
+  exits 0 and prints nothing breaks that contract. The
+  CLI exits 2, and prints no ticket id.
 - A missing adopt hook means no adoption. The CLI exits
   2, and no adoption is invented.
 - The CLI does not validate a ticket. The backend
