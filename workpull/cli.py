@@ -30,15 +30,13 @@ from typing import Any
 import click
 from typing import Callable
 
-RunHook = Callable[
-    [str, dict[str, str] | None], tuple[int, str, str]
-]
+RunHook = Callable[[str, dict[str, str]], tuple[int, str, str]]
 
 _STATE_NAME = re.compile(r"^[A-Za-z0-9 _-]+$")
 
 
 def run_hook(
-    hook_command: str, env: dict[str, str] | None
+    hook_command: str, env: dict[str, str]
 ) -> tuple[int, str, str]:
     """Run a hook command, no shell. Returns (returncode, stdout, stderr).
 
@@ -57,8 +55,7 @@ def run_hook(
     if not args:
         return 2, "", "empty hook command\n"
     hook_env = dict(os.environ)
-    if env:
-        hook_env.update(env)
+    hook_env.update(env)
     try:
         result = subprocess.run(
             args,
@@ -185,7 +182,7 @@ def describe(run_hook_fn: RunHook) -> None:
     if not hook:
         click.echo("DESCRIBE_HOOK is not set", err=True)
         raise click.exceptions.Exit(2)
-    returncode, stdout, stderr = run_hook_fn(hook, None)
+    returncode, stdout, stderr = run_hook_fn(hook, {})
     if returncode != 0:
         if stderr:
             click.echo(stderr, err=True, nl=False)

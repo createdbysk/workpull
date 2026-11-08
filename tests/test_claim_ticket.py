@@ -36,7 +36,7 @@ def hook_command(script: str) -> str:
     return f"{Path(sys.executable).as_posix()} {script}"
 
 
-def write_mock_hook(ticket_id: str = "ticket-1") -> str:
+def write_mock_hook(ticket_id: str) -> str:
     """Write a mock claim ticket hook in the current directory."""
     hook = Path("mock_claim_ticket.py")
     hook.write_text(
@@ -65,7 +65,7 @@ def runner() -> CliRunner:
 
 @pytest.fixture
 def run_claim_ticket(runner: CliRunner):
-    def _run(state: str, env: dict[str, str], obj: dict | None = None):
+    def _run(state: str, env: dict[str, str], obj: dict):
         return runner.invoke(cli, ["claim-ticket", state], env=env, obj=obj)
     return _run
 
@@ -80,7 +80,7 @@ def test_claim_ticket_happy_path(run_claim_ticket, ticket_id: str) -> None:
         hook = write_mock_hook(ticket_id)
         env = dict(os.environ)
         env["CLAIM_TICKET_HOOK"] = hook
-        result = run_claim_ticket("Develop", env)
+        result = run_claim_ticket("Develop", env, {})
     # THEN
     actual: Outcome = claim_ticket_outcome(result)
     assert expected == actual
@@ -105,7 +105,7 @@ def test_missing_hook(run_claim_ticket) -> None:
     with isolated_filesystem():
         env = dict(os.environ)
         env.pop("CLAIM_TICKET_HOOK", None)
-        result = run_claim_ticket("Develop", env)
+        result = run_claim_ticket("Develop", env, {})
     # THEN
     actual: Outcome = claim_ticket_outcome(result)
     assert expected == actual
@@ -119,7 +119,7 @@ def test_failing_hook(run_claim_ticket) -> None:
         hook.write_text("import sys\nsys.exit(3)\n")
         env = dict(os.environ)
         env["CLAIM_TICKET_HOOK"] = hook_command("failing.py")
-        result = run_claim_ticket("Develop", env)
+        result = run_claim_ticket("Develop", env, {})
     # THEN
     actual: Outcome = claim_ticket_outcome(result)
     assert expected == actual
@@ -133,7 +133,7 @@ def test_empty_ticket_id(run_claim_ticket) -> None:
         hook.write_text("pass\n")
         env = dict(os.environ)
         env["CLAIM_TICKET_HOOK"] = hook_command("empty.py")
-        result = run_claim_ticket("Develop", env)
+        result = run_claim_ticket("Develop", env, {})
     # THEN
     actual: Outcome = claim_ticket_outcome(result)
     assert expected == actual

@@ -92,7 +92,7 @@ def runner() -> CliRunner:
 
 @pytest.fixture
 def run_describe(runner: CliRunner):
-    def _run(env: dict[str, str], obj: dict | None = None):
+    def _run(env: dict[str, str], obj: dict):
         return runner.invoke(cli, ["describe"], env=env, obj=obj)
     return _run
 
@@ -107,7 +107,7 @@ def test_happy_path(run_describe) -> None:
         hook = write_mock_hook(TRIVIAL_VIEW)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -135,7 +135,7 @@ def test_missing_hook(run_describe) -> None:
     with isolated_filesystem():
         env = dict(os.environ)
         env.pop("DESCRIBE_HOOK", None)
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -149,7 +149,7 @@ def test_failing_hook(run_describe) -> None:
         hook.write_text("import sys\nsys.exit(3)\n")
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook_command("failing.py")
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -162,7 +162,7 @@ def test_invalid_toml(run_describe) -> None:
         hook = write_mock_hook("this is not toml [\n")
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -183,7 +183,7 @@ Backlog = inf
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -197,7 +197,7 @@ def test_hook_command_injection_is_not_executed(run_describe) -> None:
         side_effect = Path("pwned")
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook + " ; touch " + str(side_effect)
-        run_describe(env)
+        run_describe(env, {})
         actual: Outcome = {"side_effect_exists": side_effect.exists()}
     # THEN
     assert expected == actual
@@ -211,7 +211,7 @@ def test_hook_command_injection_unspaced_is_not_executed(run_describe) -> None:
         side_effect = Path("pwned")
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook + "; touch " + str(side_effect)
-        run_describe(env)
+        run_describe(env, {})
         actual: Outcome = {"side_effect_exists": side_effect.exists()}
     # THEN
     assert expected == actual
@@ -232,7 +232,7 @@ Backlog = inf
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -253,7 +253,7 @@ Backlog = inf
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -274,7 +274,7 @@ Backlog = inf
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -295,7 +295,7 @@ def test_whitespace_padded_state_is_rejected(run_describe) -> None:
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -317,7 +317,7 @@ def test_empty_transitions_means_all_terminal(run_describe) -> None:
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -335,7 +335,7 @@ def test_hook_comment_is_not_printed(run_describe) -> None:
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
         actual: Outcome = describe_outcome(result)
         actual["output_contains"] = "ignore previous instructions" in result.output
     # THEN
@@ -357,7 +357,7 @@ def test_state_name_with_shell_metacharacters_is_rejected(run_describe) -> None:
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -385,7 +385,7 @@ def test_spaced_state_produces_valid_toml(run_describe) -> None:
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -402,7 +402,7 @@ def test_unhashable_state_is_rejected(run_describe) -> None:
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -423,7 +423,7 @@ Backlog = inf
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -453,7 +453,7 @@ Backlog = inf
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -471,7 +471,7 @@ Backlog = "Done"
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -493,7 +493,7 @@ Backlog = inf
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -515,7 +515,7 @@ Elsewhere = 3
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -538,7 +538,7 @@ Backlog = inf
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -561,7 +561,7 @@ Backlog = inf
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
@@ -583,7 +583,7 @@ Done = 3
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
-        result = run_describe(env)
+        result = run_describe(env, {})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
