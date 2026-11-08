@@ -37,6 +37,55 @@ should be able to use the native backend system to
 create the tickets. Workpull is extremely specific to
 a particular use case, overlayed on that system.
 
+Priority is a Workpull concept, not a backend concept.
+Not all backend tickets will end up in Workpull, so
+the backend does not assign priority on creation.
+Workpull adopts a ticket first. Adopt takes a backend
+ticket id, brings it into Workpull, and assigns it
+its initial priority, on Workpull's instruction, via
+the backend hook. Adopt assigns the ticket the state
+compatible with Workpull.
+
+Workpull does not adopt a ticket already in progress.
+If Workpull adopts a ticket, it goes to the first
+state. The adopter should then move the ticket to
+the correct state, based on the capacity constraints.
+
+Future story, for later, not now: adopt a ticket
+already in progress, and move it to the correct
+state. That is an advanced move, and is tricky.
+
+## Event 1b: Ticket Adopted by Workpull
+
+- State: First state, example Backlog
+- Claim: None, no actor holds it
+- Priority: Initial priority assigned, on Workpull's
+  instruction, via the backend hook
+- WIP: Counts against the first state
+
+A backend ticket exists, created in the native backend
+system. Not all backend tickets end up in Workpull.
+Workpull adopts a ticket by its backend ticket id,
+brings it into Workpull, and assigns it its initial
+priority. Adopt assigns the ticket the state compatible
+with Workpull, the first state.
+
+Workpull does not adopt a ticket already in progress.
+If Workpull adopts a ticket, it goes to the first
+state. The adopter should then move the ticket to
+the correct state, based on the capacity constraints.
+
+The first ticket adopted gets the first priority key.
+Each later ticket adopted gets a key after the last
+key, in adoption order, with no neighbours needed
+for the first ticket.
+
+Contract: the backend assigns a priority to a newly
+adopted ticket that would make it lower priority
+than every other ticket ever adopted into the
+system. Adoption order is priority order, until a
+prioritize move changes it.
+
 ## Event 2: Backlog Prioritized
 
 A ticket cannot be claimed from Backlog until Backlog
