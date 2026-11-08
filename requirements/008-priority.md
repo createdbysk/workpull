@@ -8,7 +8,20 @@ The goal is to get work done, not to start work.
 ## Priority value
 
 - Priority is a fractional order key carried with the
-  ticket, set at backlog refinement and carried till done.
+  ticket, set by a prioritization step and carried till
+  done. The prioritization step assigns priority values
+  to tickets such that the values stay unique. That is
+  all. There is no column claim.
+- Prioritization itself has a long mutex. Tell the system
+  begin prioritization. Only then you are allowed to
+  change the values. Then say end prioritization, and
+  the values lock.
+- Prioritize as a move between tickets. A ticket is moved
+  above or below another ticket, to the top, or up or
+  down one step. The user never types a fractional value.
+  The system computes the midpoint key.
+- The catch is the race. The system can error if there
+  is a conflict. It is a low occurrence race.
 - An order key lives in a dense order: between any two
   keys there is always another key, so an insert never
   has to renumber the other tickets.
@@ -49,3 +62,15 @@ The goal is to get work done, not to start work.
   work had the higher original priority. A blocked
   ticket closer to done is helped before new work
   farther from done is started.
+- A claimed ticket is not preempted. If a lower value
+  ticket is claimed, whoever claimed it continues to
+  work on it, even if a higher value ticket waits.
+  For example, a claimed ticket worth 10 continues,
+  even if a ticket worth 100 waits.
+- If the claimed ticket blocks, then it waits, and the
+  higher value ticket is pulled, if there is capacity
+  in that column.
+- If the column has capacity and the claimed ticket is
+  not blocked, then the higher value ticket moves into
+  the higher spot, and someone else with capacity takes
+  it.

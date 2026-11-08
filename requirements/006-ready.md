@@ -22,6 +22,13 @@ Readiness to move is a state, not a color.
 - A ticket in a wait state whose next state is at its
   WIP limit stays in the wait state, and still counts
   against the wait state's WIP limit.
+- A ticket sits in a wait state only if the next state
+  does not have capacity. When a ticket moves into a
+  wait state, the system checks the next state for
+  available capacity. If there is capacity, it moves
+  into that column immediately.
+- In the AI world, if there is capacity in a column,
+  then there is an available worker by definition.
 - When a ticket moves from a wait state to the next
   state, its claim ended on the move, so no actor holds
   it, and no work has started in the new state yet.

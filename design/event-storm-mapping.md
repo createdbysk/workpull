@@ -143,14 +143,11 @@ and designed does not mean implemented.
 
 ## Claim-column
 
-- Maps to: requirement 005, `claim-column <state>` is a
-  future command, and design 005, a separate future
-  command with its own hook. Event 2, prioritization
-  is one reason to claim a column, no other reason is
-  in mind, none invented.
-- Gap, requirement: partial, purpose is one reason only.
-  Gap, design / implementation: yes. No design, no hook,
-  no command, no tests.
+- Dropped 2026-11-08, by Satish. Column claim has no
+  value. What is needed is a prioritization step that
+  assigns priority values to tickets such that the values
+  stay unique. That is all.
+- Gap: no. This is a dropped concept, not a missing piece.
 
 ## Summary of proved gaps
 
