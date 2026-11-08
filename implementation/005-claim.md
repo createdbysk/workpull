@@ -3,7 +3,8 @@
 ## Language and tools
 
 - Python 3.12. Runtime dependency: Click, for the CLI.
-- Tests: unittest, stdlib only, no pytest.
+- Tests: unittest, plus `parameterized` for parametrized
+  tests, dev dependency in `pyproject.toml`, no pytest.
 - Lint: pymarkdown, declared as a dev dependency in
   `pyproject.toml` (`pymarkdownlnt>=0.9.41`, install with
   `pip install -e ".[dev]"`).
@@ -37,8 +38,11 @@ Run: `python scripts/dev.py test`
 Claim ticket tests run through Click's runner, in an isolated
 filesystem.
 
-- Happy path: mock hook checks `WORKPULL_STATE` is `Develop`
-  and prints `ticket-1`, CLI exit 0, output is `ticket-1`.
+- Happy path, parametrized with `parameterized`: mock hook
+  checks `WORKPULL_STATE` is `Develop` and prints the ticket
+  id, CLI exit 0, output is that id. Cases: `ticket-1`
+  and `0`. The `0` case proves a ticket id of `0`, a
+  non-empty string, is not treated as empty.
 - `claim-ticket --help`: exit 0, shows `STATE` and
   "Claim a single ticket".
 - Top level `--help`: exit 0, lists `claim-ticket` and

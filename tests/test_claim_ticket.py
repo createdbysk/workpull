@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from click.testing import CliRunner
+from parameterized import parameterized
 
 from workpull.cli import cli
 
@@ -36,14 +37,14 @@ def hook_command(script: str) -> str:
     return f"{Path(sys.executable).as_posix()} {script}"
 
 
-def write_mock_hook() -> str:
+def write_mock_hook(ticket_id: str = "ticket-1") -> str:
     """Write a mock claim ticket hook in the current directory."""
     hook = Path("mock_claim_ticket.py")
     hook.write_text(
         "import os, sys\n"
         "if os.environ.get('WORKPULL_STATE') != 'Develop':\n"
         "    sys.exit(1)\n"
-        "sys.stdout.write('ticket-1\\n')\n"
+        f"sys.stdout.write('{ticket_id}\\n')\n"
     )
     return hook_command("mock_claim_ticket.py")
 
@@ -65,12 +66,16 @@ class TestClaimTicket(unittest.TestCase):
     def run_claim_ticket(self, state: str, env: dict[str, str]):
         return self.runner.invoke(cli, ["claim-ticket", state], env=env)
 
-    def test_claim_ticket_happy_path(self) -> None:
+    @parameterized.expand([
+        ("ticket-1",),
+        ("0",),
+    ])
+    def test_claim_ticket_happy_path(self, ticket_id: str) -> None:
         # GIVEN
-        expected: Outcome = {"exit_code": 0, "ticket_id": "ticket-1"}
+        expected: Outcome = {"exit_code": 0, "ticket_id": ticket_id}
         # WHEN
         with isolated_filesystem():
-            hook = write_mock_hook()
+            hook = write_mock_hook(ticket_id)
             env = dict(os.environ)
             env["CLAIM_TICKET_HOOK"] = hook
             result = self.run_claim_ticket("Develop", env)
