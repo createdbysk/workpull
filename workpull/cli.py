@@ -175,7 +175,11 @@ def claim_ticket(state: str) -> None:
     returncode, stdout, _ = run_hook(hook, env={"WORKPULL_STATE": state})
     if returncode != 0:
         raise click.exceptions.Exit(returncode)
-    click.echo(stdout.strip())
+    ticket_id = stdout.strip()
+    if not ticket_id:
+        click.echo("claim-ticket hook returned no ticket id", err=True)
+        raise click.exceptions.Exit(2)
+    click.echo(ticket_id)
 
 
 @cli.command()

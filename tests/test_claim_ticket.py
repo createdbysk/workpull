@@ -90,6 +90,34 @@ class TestClaimTicket(unittest.TestCase):
         actual: Outcome = claim_ticket_outcome(result)
         self.assertEqual(expected, actual)
 
+    def test_failing_hook(self) -> None:
+        # GIVEN
+        expected: Outcome = {"exit_code": 3, "ticket_id": None}
+        # WHEN
+        with isolated_filesystem():
+            hook = Path("failing.py")
+            hook.write_text("import sys\nsys.exit(3)\n")
+            env = dict(os.environ)
+            env["CLAIM_TICKET_HOOK"] = hook_command("failing.py")
+            result = self.run_claim_ticket("Develop", env)
+        # THEN
+        actual: Outcome = claim_ticket_outcome(result)
+        self.assertEqual(expected, actual)
+
+    def test_empty_ticket_id(self) -> None:
+        # GIVEN
+        expected: Outcome = {"exit_code": 2, "ticket_id": None}
+        # WHEN
+        with isolated_filesystem():
+            hook = Path("empty.py")
+            hook.write_text("pass\n")
+            env = dict(os.environ)
+            env["CLAIM_TICKET_HOOK"] = hook_command("empty.py")
+            result = self.run_claim_ticket("Develop", env)
+        # THEN
+        actual: Outcome = claim_ticket_outcome(result)
+        self.assertEqual(expected, actual)
+
     def test_claim_ticket_help(self) -> None:
         # GIVEN
         expected: Outcome = {"exit_code": 0, "output_contains": True}
