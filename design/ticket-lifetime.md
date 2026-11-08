@@ -17,7 +17,20 @@ work, red blocked.
 
 A ticket originates in Backlog. There is no earlier event.
 
-## Event 2: Ticket Claimed
+## Event 2: Backlog Prioritized
+
+Gap found by event storming: a ticket cannot be claimed
+from Backlog until Backlog has been prioritized.
+
+- State: Backlog, unchanged
+- Signal: White, unchanged
+- Claim: None, no actor holds it
+- Priority: Set at backlog refinement, top to bottom.
+  The ticket takes its priority position in Backlog, and
+  carries that priority until Done, unless a business
+  priority change reprioritizes it mid-flight.
+
+## Event 3: Ticket Claimed
 
 - State: Backlog, unchanged
 - Signal: White, unchanged, claim does not change the
