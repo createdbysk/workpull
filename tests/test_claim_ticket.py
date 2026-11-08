@@ -16,6 +16,7 @@ class Outcome(TypedDict, total=False):
     exit_code: int
     output_contains: bool
     ticket_id: str | None
+    help_text: str
 
 
 def write_mock_hook(ticket_id: str) -> str:
@@ -116,16 +117,26 @@ def test_empty_ticket_id(run_claim_ticket) -> None:
     actual: Outcome = claim_ticket_outcome(result)
     assert expected == actual
 
-def test_claim_ticket_help(runner) -> None:
+def test_claim_ticket_help(runner, normalize_help) -> None:
     # GIVEN
-    expected: Outcome = {"exit_code": 0, "output_contains": True}
+    expected: Outcome = {
+        "exit_code": 0,
+        "help_text": normalize_help(
+            """Usage: cli claim-ticket [OPTIONS] STATE
+
+            Claim a single ticket in a state.
+
+            Options:
+              --help  Show this message and exit.
+            """
+        ),
+    }
     # WHEN
     result = runner.invoke(cli, ["claim-ticket", "--help"])
     # THEN
     actual: Outcome = {
         "exit_code": result.exit_code,
-        "output_contains": "STATE" in result.output
-        and "Claim a single ticket" in result.output,
+        "help_text": normalize_help(result.output),
     }
     assert expected == actual
 

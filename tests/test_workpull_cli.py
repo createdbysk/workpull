@@ -7,29 +7,44 @@ command's own test file.
 
 from typing import TypedDict
 
-import pytest
-from click.testing import CliRunner
-
 from workpull.cli import cli
 
 
 class Outcome(TypedDict):
     exit_code: int
-    has_all_commands: bool
+    help_text: str
 
 
-
-def test_top_level_help_lists_commands(runner) -> None:
+def test_top_level_help_lists_commands(runner, normalize_help) -> None:
     # GIVEN
-    commands = ["claim-ticket", "describe"]
-    expected: Outcome = {"exit_code": 0, "has_all_commands": True}
+    expected: Outcome = {
+        "exit_code": 0,
+        "help_text": normalize_help(
+            """Usage: cli [OPTIONS] COMMAND [ARGS]...
+
+            Workpull: describe a backend's states and transitions.
+
+            Composition root: this is where the real run_hook is wired in. A caller that
+            already supplied a run_hook, in ctx.obj, keeps it, so tests can inject a
+            fake.
+
+            Options:
+              --version  Show the version and exit.
+              --help     Show this message and exit.
+
+            Commands:
+              adopt         Adopt a ticket.
+              claim-ticket  Claim a single ticket in a state.
+              describe      Describe a backend's states and transitions.
+              prioritize    Move a ticket in a state, to a new priority.
+            """
+        ),
+    }
     # WHEN
     result = runner.invoke(cli, ["--help"])
     # THEN
     actual: Outcome = {
         "exit_code": result.exit_code,
-        "has_all_commands": all(command in result.output for command in commands),
+        "help_text": normalize_help(result.output),
     }
     assert expected == actual
-
-

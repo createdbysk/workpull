@@ -38,6 +38,7 @@ class Outcome(TypedDict, total=False):
     view: View | None
     side_effect_exists: bool
     output_contains: bool
+    help_text: str
 
 
 def write_mock_hook(body: str) -> str:
@@ -566,15 +567,26 @@ Done = 3
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_help_lists_describe(runner) -> None:
+def test_describe_help(runner, normalize_help) -> None:
     # GIVEN
-    expected: Outcome = {"exit_code": 0, "output_contains": True}
+    expected: Outcome = {
+        "exit_code": 0,
+        "help_text": normalize_help(
+            """Usage: cli describe [OPTIONS]
+
+            Describe a backend's states and transitions.
+
+            Options:
+              --help  Show this message and exit.
+            """
+        ),
+    }
     # WHEN
-    result = runner.invoke(cli, ["--help"])
+    result = runner.invoke(cli, ["describe", "--help"])
     # THEN
     actual: Outcome = {
         "exit_code": result.exit_code,
-        "output_contains": "describe" in result.output,
+        "help_text": normalize_help(result.output),
     }
     assert expected == actual
 
