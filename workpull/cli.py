@@ -225,12 +225,64 @@ def cli(ctx: click.Context) -> None:
     ctx.obj.setdefault("run_hook", run_hook)
 
 
+def adopt(ticket: str, run_hook_fn: RunHook) -> None:
+    """Adopt a ticket."""
+    hook = os.environ["ADOPT_HOOK"]
+    result = run_hook_fn(hook, {"WORKPULL_TICKET": ticket})
+    click.echo(result.stdout.strip())
+
+
+def prioritize(
+    state: str,
+    ticket: str,
+    above: str | None,
+    below: str | None,
+    top: bool,
+    up: bool,
+    down: bool,
+    run_hook_fn: RunHook,
+) -> None:
+    """Move a ticket in a state, to a new priority."""
+    raise NotImplementedError
+
+
+@cli.command(name="adopt")
+@click.argument("ticket")
+@click.pass_context
+def adopt_command(ctx: click.Context, ticket: str) -> None:
+    """Adopt a ticket."""
+    adopt(ticket, ctx.obj["run_hook"])
+
+
 @cli.command(name="claim-ticket")
 @click.argument("state")
 @click.pass_context
 def claim_ticket_command(ctx: click.Context, state: str) -> None:
     """Claim a single ticket in a state."""
     claim_ticket(state, ctx.obj["run_hook"])
+
+
+@cli.command(name="prioritize")
+@click.argument("state")
+@click.argument("ticket")
+@click.option("--above", "above", default=None)
+@click.option("--below", "below", default=None)
+@click.option("--top", "top", is_flag=True)
+@click.option("--up", "up", is_flag=True)
+@click.option("--down", "down", is_flag=True)
+@click.pass_context
+def prioritize_command(
+    ctx: click.Context,
+    state: str,
+    ticket: str,
+    above: str | None,
+    below: str | None,
+    top: bool,
+    up: bool,
+    down: bool,
+) -> None:
+    """Move a ticket in a state, to a new priority."""
+    prioritize(state, ticket, above, below, top, up, down, ctx.obj["run_hook"])
 
 
 @cli.command(name="describe")
