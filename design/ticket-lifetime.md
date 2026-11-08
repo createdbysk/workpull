@@ -32,6 +32,10 @@ backlog. That is a system specific concept, and not a
 concern of Workpull. Some entity creates the ticket and
 it starts in the first state. The entity depends on the
 system itself, and is not a concern of Workpull.
+Workpull does not implement a create at all. Anyone
+should be able to use the native backend system to
+create the tickets. Workpull is extremely specific to
+a particular use case, overlayed on that system.
 
 ## Event 2: Backlog Prioritized
 
