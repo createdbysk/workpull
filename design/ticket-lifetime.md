@@ -25,10 +25,13 @@ from Backlog until Backlog has been prioritized.
 - State: Backlog, unchanged
 - Signal: White, unchanged
 - Claim: None, no actor holds it
-- Priority: Set at backlog refinement, top to bottom.
-  The ticket takes its priority position in Backlog, and
-  carries that priority until Done, unless a business
-  priority change reprioritizes it mid-flight.
+- Priority: Set at backlog refinement, top to bottom, as
+  a fractional value carried with the ticket. A column
+  starts with .1, .2, .3. A ticket inserted between two
+  tickets takes a value between theirs, adding decimal
+  places as needed. The ticket carries that value until
+  Done, unless a business priority change reprioritizes
+  it mid-flight, giving it a new fractional value.
 
 ## Event 3: Ticket Claimed
 
