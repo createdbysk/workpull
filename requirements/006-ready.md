@@ -27,6 +27,23 @@ Readiness to move is a state, not a color.
   it, and no work has started in the new state yet.
   A ticket in a new state is claimable.
 
+## Blocked
+
+- A blocked ticket occupies WIP, and keeps its priority.
+- Blocked is an action for the claimant. They need to
+  unblock the ticket. It is part of the same work.
+- If the blocker is external, out of the claimant's
+  control, it becomes a conversation. The product
+  manager decides whether the ticket keeps its priority.
+  If it keeps its priority, there has to be active work
+  to unblock it. If not, its priority is reduced,
+  because the delay makes it lose its value.
+- Once it unblocks, there is another conversation about
+  priority.
+- If the decision is to open up WIP, then discard the
+  ticket, work with the external party to unblock, and
+  then bring the work back into the backlog.
+
 ## Claim and work, without colors
 
 - A ticket in a column gets claimed. Claim is a mutex.
