@@ -11,13 +11,13 @@ done, not to start work.
 
 - A slot comes open in a state when its count drops below
   its WIP limit, so it has capacity.
-- When a slot comes open, the system looks for green
-  tickets in its previous state, and moves them.
-- It moves the highest priority green ticket from that
+- When a slot comes open, the system looks for tickets
+  in the wait state for it, and moves them.
+- It moves the highest priority ticket from that wait
   state, not the ticket that finished first.
-- A green lower priority ticket moves when a higher
-  priority ticket is not green. Capacity does not sit
-  idle waiting for unfinished work.
-- If there is no green ticket in the previous state, the
-  slot stays open. It does not pull unfinished work, and
-  it does not start new work.
+- A lower priority ticket in the wait state moves when a
+  higher priority ticket is not in the wait state.
+  Capacity does not sit idle waiting for unfinished work.
+- If there is no ticket in the wait state, the slot stays
+  open. It does not pull unfinished work, and it does
+  not start new work.

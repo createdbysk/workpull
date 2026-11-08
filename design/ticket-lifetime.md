@@ -111,3 +111,69 @@ The product manager releases the claim.
 - Claim: Released, no actor holds it. The ticket is now
   unclaimed and green.
 - WIP: Still counts against Backlog
+
+## Event 8: Green Ticket Published
+
+When a ticket goes green, the system publishes its state
+and id.
+
+- State: Backlog, example, unchanged
+- Signal: Green, ready to move, unchanged
+- Claim: None, unchanged
+- Publication: State and id published. Work pullers
+  subscribe to this signal, per state. The puller for
+  the next state is subscribed to green events from its
+  predecessor states.
+- WIP: Still counts against Backlog
+
+## Event 9: Ticket Claimed to Move It
+
+The puller for the next state claims the ticket to move
+it, to prevent races. The claimant is the downstream
+state, the system doing the pull, not a human worker.
+
+- State: Backlog, example, unchanged
+- Signal: Green, unchanged, claim does not change the
+  signal
+- Claim: Held, by the puller for the next state
+- WIP: Still counts against Backlog
+
+## Event 10: Ticket Moved to Next State
+
+The puller for the next state pulls the ticket, if its
+state has capacity, below its WIP limit. The green
+broadcast is only for a move into a capacity-available
+slot.
+
+## Event 11: Ticket Waits, No Capacity
+
+If the next state has no capacity, the ticket just waits.
+
+- State: Backlog, example, unchanged
+- Signal: Green, ready to move, unchanged
+- Claim: None, unchanged. No claim to move is made.
+- WIP: Still counts against Backlog
+
+## Event 12: Slot Opened in Next State
+
+When the next state has capacity, that is an event to
+look for green tickets to move.
+
+- State: Next state, example, unchanged, now below its
+  WIP limit
+- Signal: No change to this ticket yet
+- Claim: None, unchanged
+- Action: The puller for the next state looks for green
+  tickets in its predecessor states, highest priority
+  first, and pulls one per open slot, as in Event 9 and
+  Event 10.
+
+- State: Next state, example, changed from Backlog
+- Signal: White, reset on move, unclaimed, no work
+  started in the new state yet
+- Claim: Ended on the move, no actor holds it
+- Priority: Carried with the ticket, as a fractional
+  order key. The ticket takes its priority position in
+  the new state by that key, not by arrival order.
+- WIP: Now counts against the next state, no longer
+  against Backlog

@@ -34,13 +34,13 @@
   preserves that exit code, and prints no ticket id.
 - A missing claim ticket hook means no claim. The CLI exits 2,
   and no claim is invented.
-- The CLI does not validate a state or a color. It only
+- The CLI does not validate a state. It only
   forwards the hook's ticket id on success, and its exit
   code on failure.
 - Claim ticket itself does not move a ticket, does not change
-  its state, and does not change its color. It only acquires
-  the mutex that gives the claiming actor the ability to
-  change its color.
+  its state. It only acquires
+  the mutex that gives the claiming actor exclusive access
+  to act on that ticket.
 - Claim ending is not part of the claim ticket command. A
   ticket moving, an actor releasing, and an actor going away
   are backend actions, and a release command is a separate
@@ -55,14 +55,14 @@
   environment. Printed output must still be treated as untrusted
   text by the consumer. This code does not make backend text
   safe to follow as instructions.
-- The backend hook owns the mutex store and the color rules.
-  The CLI owns none of them.
+- The backend hook owns the mutex store.
+  The CLI owns none of it.
 
 ## SOLID mapping
 
 - Single responsibility: the CLI runs a hook and forwards its
-  result. It knows no backend, no mutex store, and no color
-  logic. A hook talks to its backend only. It knows no pull logic.
+  result. It knows no backend, no mutex store, and no
+  ticket logic. A hook talks to its backend only. It knows no pull logic.
 - Open/closed: a new backend is a new hook command, no CLI change.
   A new hook is a new environment variable, not a change to
   existing hooks.
