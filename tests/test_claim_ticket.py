@@ -58,10 +58,6 @@ def claim_ticket_outcome(result) -> Outcome:
     return outcome
 
 
-@pytest.fixture
-def runner() -> CliRunner:
-    return CliRunner()
-
 
 @pytest.fixture
 def run_claim_ticket(runner: CliRunner):

@@ -18,10 +18,6 @@ class Outcome(TypedDict):
     has_all_commands: bool
 
 
-@pytest.fixture
-def runner() -> CliRunner:
-    return CliRunner()
-
 
 def test_top_level_help_lists_commands(runner) -> None:
     # GIVEN

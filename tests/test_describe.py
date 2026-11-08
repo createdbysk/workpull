@@ -85,10 +85,6 @@ def describe_outcome(result) -> Outcome:
     return outcome
 
 
-@pytest.fixture
-def runner() -> CliRunner:
-    return CliRunner()
-
 
 @pytest.fixture
 def run_describe(runner: CliRunner):
