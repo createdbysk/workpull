@@ -11,7 +11,6 @@ import os
 import subprocess
 import sys
 import tomllib
-import unittest
 from pathlib import Path
 from typing import TypedDict
 
@@ -53,47 +52,44 @@ def run_cli(env: dict[str, str]):
     )
 
 
-class TestGitHubDescribe(unittest.TestCase):
-    def test_cli_via_github_adapter(self) -> None:
-        # GIVEN
-        expected: Outcome = {
-            "exit_code": 0,
-            "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": float("inf")}},
-        }
-        env = dict(os.environ)
-        env["DESCRIBE_HOOK"] = f"{Path(sys.executable).as_posix()} {ADAPTER.as_posix()}"
-        # WHEN
-        result = run_cli(env)
-        # THEN
-        actual: Outcome = {
-            "exit_code": result.returncode,
-            "view": parse_view(result.stdout) if result.returncode == 0 else None,
-        }
-        self.assertEqual(expected, actual)
+def test_cli_via_github_adapter() -> None:
+    # GIVEN
+    expected: Outcome = {
+        "exit_code": 0,
+        "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": float("inf")}},
+    }
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = f"{Path(sys.executable).as_posix()} {ADAPTER.as_posix()}"
+    # WHEN
+    result = run_cli(env)
+    # THEN
+    actual: Outcome = {
+        "exit_code": result.returncode,
+        "view": parse_view(result.stdout) if result.returncode == 0 else None,
+    }
+    assert expected == actual
 
-    def test_adapter_direct_output_is_exact(self) -> None:
-        # GIVEN
-        expected: Outcome = {
-            "exit_code": 0,
-            "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": float("inf")}},
-            "output_contains": False,
-        }
-        # WHEN
-        result = subprocess.run(
-            [sys.executable, str(ADAPTER)],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        # THEN
-        actual: Outcome = {
-            "exit_code": result.returncode,
-            "view": parse_view(result.stdout) if result.returncode == 0 else None,
-            "output_contains": "Backlog" in result.stdout,
-        }
-        self.assertEqual(expected, actual)
+def test_adapter_direct_output_is_exact() -> None:
+    # GIVEN
+    expected: Outcome = {
+        "exit_code": 0,
+        "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": float("inf")}},
+        "output_contains": False,
+    }
+    # WHEN
+    result = subprocess.run(
+        [sys.executable, str(ADAPTER)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    # THEN
+    actual: Outcome = {
+        "exit_code": result.returncode,
+        "view": parse_view(result.stdout) if result.returncode == 0 else None,
+        "output_contains": "Backlog" in result.stdout,
+    }
+    assert expected == actual
 
 
-if __name__ == "__main__":
-    unittest.main()

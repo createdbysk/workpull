@@ -22,7 +22,7 @@ as missing, do not pivot to another toolchain or language.
 ## Tech stack
 
 - Python 3.12. Runtime dependency: Click, for the CLI.
-- Tests: unittest, plus Click's test runner for CLI tests.
+- Tests: pytest, plus Click's test runner for CLI tests.
 - Lint: pymarkdown, config in `.pymarkdown.json`, declared as a
   dev dependency in `pyproject.toml` (`pip install -e ".[dev]"`).
 - Type check: pyrefly, config in `pyrefly.toml`, declared as a
@@ -74,7 +74,7 @@ All `python` commands below are the venv Python, after setup.
 - `design/` — how a requirement is met.
 - `implementation/` — the concrete build for a requirement.
 - `workpull/` — the CLI package.
-- `tests/` — unittest, one file per requirement.
+- `tests/` — pytest, one file per requirement.
 - `adapters/` — mock hooks for tests.
 - `plugins/` — repo examples, not installed package contents.
   `plugins/github/` is a shape-validation mock for GitHub

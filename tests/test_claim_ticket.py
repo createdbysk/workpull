@@ -4,12 +4,11 @@ import contextlib
 import os
 import sys
 import tempfile
-import unittest
 from pathlib import Path
 from typing import TypedDict
 
+import pytest
 from click.testing import CliRunner
-from parameterized import parameterized
 
 from workpull.cli import cli
 
@@ -59,82 +58,75 @@ def claim_ticket_outcome(result) -> Outcome:
     return outcome
 
 
-class TestClaimTicket(unittest.TestCase):
-    def setUp(self) -> None:
-        self.runner = CliRunner()
+def run_claim_ticket(state: str, env: dict[str, str]):
+    return CliRunner().invoke(cli, ["claim-ticket", state], env=env)
 
-    def run_claim_ticket(self, state: str, env: dict[str, str]):
-        return self.runner.invoke(cli, ["claim-ticket", state], env=env)
 
-    @parameterized.expand([
-        ("ticket-1",),
-        ("0",),
-    ])
-    def test_claim_ticket_happy_path(self, ticket_id: str) -> None:
-        # GIVEN
-        expected: Outcome = {"exit_code": 0, "ticket_id": ticket_id}
-        # WHEN
-        with isolated_filesystem():
-            hook = write_mock_hook(ticket_id)
-            env = dict(os.environ)
-            env["CLAIM_TICKET_HOOK"] = hook
-            result = self.run_claim_ticket("Develop", env)
-        # THEN
-        actual: Outcome = claim_ticket_outcome(result)
-        self.assertEqual(expected, actual)
+@pytest.mark.parametrize("ticket_id", ["ticket-1", "0"])
 
-    def test_missing_hook(self) -> None:
-        # GIVEN
-        expected: Outcome = {"exit_code": 2, "ticket_id": None}
-        # WHEN
-        with isolated_filesystem():
-            env = dict(os.environ)
-            env.pop("CLAIM_TICKET_HOOK", None)
-            result = self.run_claim_ticket("Develop", env)
-        # THEN
-        actual: Outcome = claim_ticket_outcome(result)
-        self.assertEqual(expected, actual)
+def test_claim_ticket_happy_path(ticket_id: str) -> None:
+    # GIVEN
+    expected: Outcome = {"exit_code": 0, "ticket_id": ticket_id}
+    # WHEN
+    with isolated_filesystem():
+        hook = write_mock_hook(ticket_id)
+        env = dict(os.environ)
+        env["CLAIM_TICKET_HOOK"] = hook
+        result = run_claim_ticket("Develop", env)
+    # THEN
+    actual: Outcome = claim_ticket_outcome(result)
+    assert expected == actual
 
-    def test_failing_hook(self) -> None:
-        # GIVEN
-        expected: Outcome = {"exit_code": 3, "ticket_id": None}
-        # WHEN
-        with isolated_filesystem():
-            hook = Path("failing.py")
-            hook.write_text("import sys\nsys.exit(3)\n")
-            env = dict(os.environ)
-            env["CLAIM_TICKET_HOOK"] = hook_command("failing.py")
-            result = self.run_claim_ticket("Develop", env)
-        # THEN
-        actual: Outcome = claim_ticket_outcome(result)
-        self.assertEqual(expected, actual)
+def test_missing_hook() -> None:
+    # GIVEN
+    expected: Outcome = {"exit_code": 2, "ticket_id": None}
+    # WHEN
+    with isolated_filesystem():
+        env = dict(os.environ)
+        env.pop("CLAIM_TICKET_HOOK", None)
+        result = run_claim_ticket("Develop", env)
+    # THEN
+    actual: Outcome = claim_ticket_outcome(result)
+    assert expected == actual
 
-    def test_empty_ticket_id(self) -> None:
-        # GIVEN
-        expected: Outcome = {"exit_code": 2, "ticket_id": None}
-        # WHEN
-        with isolated_filesystem():
-            hook = Path("empty.py")
-            hook.write_text("pass\n")
-            env = dict(os.environ)
-            env["CLAIM_TICKET_HOOK"] = hook_command("empty.py")
-            result = self.run_claim_ticket("Develop", env)
-        # THEN
-        actual: Outcome = claim_ticket_outcome(result)
-        self.assertEqual(expected, actual)
+def test_failing_hook() -> None:
+    # GIVEN
+    expected: Outcome = {"exit_code": 3, "ticket_id": None}
+    # WHEN
+    with isolated_filesystem():
+        hook = Path("failing.py")
+        hook.write_text("import sys\nsys.exit(3)\n")
+        env = dict(os.environ)
+        env["CLAIM_TICKET_HOOK"] = hook_command("failing.py")
+        result = run_claim_ticket("Develop", env)
+    # THEN
+    actual: Outcome = claim_ticket_outcome(result)
+    assert expected == actual
 
-    def test_claim_ticket_help(self) -> None:
-        # GIVEN
-        expected: Outcome = {"exit_code": 0, "output_contains": True}
-        # WHEN
-        result = self.runner.invoke(cli, ["claim-ticket", "--help"])
-        # THEN
-        actual: Outcome = {
-            "exit_code": result.exit_code,
-            "output_contains": "STATE" in result.output
-            and "Claim a single ticket" in result.output,
-        }
-        self.assertEqual(expected, actual)
+def test_empty_ticket_id() -> None:
+    # GIVEN
+    expected: Outcome = {"exit_code": 2, "ticket_id": None}
+    # WHEN
+    with isolated_filesystem():
+        hook = Path("empty.py")
+        hook.write_text("pass\n")
+        env = dict(os.environ)
+        env["CLAIM_TICKET_HOOK"] = hook_command("empty.py")
+        result = run_claim_ticket("Develop", env)
+    # THEN
+    actual: Outcome = claim_ticket_outcome(result)
+    assert expected == actual
 
-if __name__ == "__main__":
-    unittest.main()
+def test_claim_ticket_help() -> None:
+    # GIVEN
+    expected: Outcome = {"exit_code": 0, "output_contains": True}
+    # WHEN
+    result = CliRunner().invoke(cli, ["claim-ticket", "--help"])
+    # THEN
+    actual: Outcome = {
+        "exit_code": result.exit_code,
+        "output_contains": "STATE" in result.output
+        and "Claim a single ticket" in result.output,
+    }
+    assert expected == actual
+

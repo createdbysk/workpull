@@ -3,7 +3,7 @@
 ## Stack
 
 - Python 3.12. Runtime dependency: Click, for the CLI.
-- Tests: unittest, stdlib only, no pytest, plus Click's test
+- Tests: pytest, plus Click's test
   runner for CLI tests.
 
 ## Files

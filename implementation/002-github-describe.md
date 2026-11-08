@@ -15,7 +15,7 @@
 
 ## Tests
 
-- `tests/test_github_describe.py`, unittest, 2 tests:
+- `tests/test_github_describe.py`, pytest, 2 tests:
   1. CLI via the GitHub adapter returns states Open, Closed
      and transition Open -> Closed.
   2. Adapter direct output is exactly states, transitions, and wip_limits, with

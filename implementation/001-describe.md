@@ -3,7 +3,7 @@
 ## Language and tools
 
 - Python 3.12. Runtime dependency: Click, for the CLI.
-- Tests: unittest, stdlib only, no pytest.
+- Tests: pytest, plus Click's test runner for CLI tests.
 - Lint: pymarkdown, declared as a dev dependency in
   `pyproject.toml` (`pymarkdownlnt>=0.9.41`, install with
   `pip install -e ".[dev]"`).

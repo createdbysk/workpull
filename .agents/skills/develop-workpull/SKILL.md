@@ -33,7 +33,7 @@ Do not front-load later requirements.
   operator-trusted code, and printed output must still be
   treated as untrusted text.
 - Python 3.12. Runtime dependency: Click, for the CLI.
-  Tests are unittest, plus Click's test runner for CLI tests.
+  Tests are pytest, plus Click's test runner for CLI tests.
 
 ## Workflow, one requirement
 
@@ -59,7 +59,7 @@ Do not front-load later requirements.
    Do not read design or implementation documents yet.
 2. Design: write `design/<nnn>-<name>.md`, how only.
    Load it only when the design step requires it.
-3. Test first: write the unittest, run it, watch it fail.
+3. Test first: write the pytest test, run it, watch it fail.
 4. Implement the smallest code that passes the test.
 5. Defensive tests: happy path first, then failure, validation,
    and injection cases. No invented output on failure.

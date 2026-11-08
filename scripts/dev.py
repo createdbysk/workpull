@@ -84,7 +84,7 @@ def cmd_install(_args):
 
 def cmd_test(_args):
     python = venv_python() if venv_python().exists() else sys.executable
-    return run([str(python), "-m", "unittest", "discover", "-s", "tests"])
+    return run([str(python), "-m", "pytest", "tests", "-q"])
 
 
 def cmd_type(_args):
@@ -128,7 +128,7 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("setup", help="Create .venv and install dev deps.")
     sub.add_parser("install", help="Install, only inside an activated venv.")
-    sub.add_parser("test", help="Run unittest.")
+    sub.add_parser("test", help="Run pytest.")
     sub.add_parser("lint", help="Run pymarkdown on docs.")
     sub.add_parser("type", help="Run pyrefly type check.")
     args = parser.parse_args(argv)
