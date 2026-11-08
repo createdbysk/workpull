@@ -21,9 +21,10 @@
   - `claim_ticket(state)`: reads `CLAIM_TICKET_HOOK`, returns
     exit 2 with no ticket invented when the hook is missing,
     runs the hook with `WORKPULL_STATE` set to the state
-    argument, prints the ticket id returned on stdout.
-    Failing hook and empty ticket id are not handled yet. No
-    code for them is written until a test requires it.
+    argument, preserves the hook's exit code on failure,
+    prints the ticket id returned on stdout on success.
+    Empty ticket id is not handled yet. No code for it is
+    written until a test requires it.
 - `tests/test_claim_ticket.py`: tests, driving the CLI through
   Click's runner, with an explicit environment per test.
 - `tests/test_workpull_cli.py`: top level help test, listing
@@ -45,7 +46,9 @@ filesystem.
 
 - Missing hook: no hook set, CLI exit 2, no ticket invented.
 
-Failing hook and empty ticket id are not handled in the
-code, and are not yet tested. To add either, write a red
-test first, then the code that makes that test pass. No
-defensive code without a test justifying it.
+- Failing hook: hook exits 3, CLI exit 3, no ticket invented.
+
+Empty ticket id is not handled in the code, and is not yet
+tested. To add it, write a red test first, then the code
+that makes that test pass. No defensive code without a test
+justifying it.

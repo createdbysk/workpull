@@ -172,7 +172,9 @@ def claim_ticket(state: str) -> None:
     if not hook:
         click.echo("CLAIM_TICKET_HOOK is not set", err=True)
         raise click.exceptions.Exit(2)
-    _, stdout, _ = run_hook(hook, env={"WORKPULL_STATE": state})
+    returncode, stdout, _ = run_hook(hook, env={"WORKPULL_STATE": state})
+    if returncode != 0:
+        raise click.exceptions.Exit(returncode)
     click.echo(stdout.strip())
 
 
