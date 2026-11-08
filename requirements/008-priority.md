@@ -7,15 +7,26 @@ The goal is to get work done, not to start work.
 
 ## Priority value
 
-- Priority is a fractional value carried with the ticket,
-  set at backlog refinement and carried till done.
-- A column starts with values .1, .2, .3, top to bottom.
-- A ticket inserted between two tickets takes a value
-  between theirs, adding decimal places as needed, for
-  example .15 between .1 and .2. No other ticket's value
-  changes on an insert, so there is no renumbering churn.
-- Reprioritizing a ticket means giving it a new fractional
-  value at its new position.
+- Priority is a fractional order key carried with the
+  ticket, set at backlog refinement and carried till done.
+- An order key lives in a dense order: between any two
+  keys there is always another key, so an insert never
+  has to renumber the other tickets.
+- A ticket inserted between two tickets takes the
+  midpoint key between theirs. A ticket inserted after
+  the last ticket takes a key after the last key. The
+  exact value is any key strictly between its neighbours,
+  or after the last key if there is no next key.
+- Order keys are stored as strings or arbitrary-precision
+  decimals, never as floats. A float cannot represent
+  .1, .15, or .91 exactly, and midpoint calculations
+  lose precision after many inserts.
+- When keys get too long, the column is rebalanced once,
+  back to short keys, for example .1, .2, .3, top to
+  bottom. Rebalancing is rare, and is the only operation
+  that changes other tickets' keys.
+- Reprioritizing a ticket means giving it a new order
+  key at its new position, by the midpoint rule above.
 
 ## Priority within a column
 

@@ -26,12 +26,15 @@ from Backlog until Backlog has been prioritized.
 - Signal: White, unchanged
 - Claim: None, no actor holds it
 - Priority: Set at backlog refinement, top to bottom, as
-  a fractional value carried with the ticket. A column
-  starts with .1, .2, .3. A ticket inserted between two
-  tickets takes a value between theirs, adding decimal
-  places as needed. The ticket carries that value until
-  Done, unless a business priority change reprioritizes
-  it mid-flight, giving it a new fractional value.
+  a fractional order key carried with the ticket. A
+  ticket inserted between two tickets takes the midpoint
+  key between theirs. A ticket inserted after the last
+  ticket takes a key after the last key. Order keys are
+  stored as strings or arbitrary-precision decimals,
+  never as floats. When keys get too long, the column is
+  rebalanced once, back to short keys. The ticket carries
+  that key until Done, unless a business priority change
+  reprioritizes it mid-flight, giving it a new order key.
 
 ## Event 3: Ticket Claimed
 
