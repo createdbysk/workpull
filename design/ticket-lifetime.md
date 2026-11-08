@@ -168,16 +168,18 @@ is it.
   the previous wait state, highest priority first, one
   per open slot, as in Event 11.
 
-## Event 11: Ticket Claimed to Move It
+## Event 11: Ticket Moved by the System
 
-The puller for the next state claims the ticket to move
-it, to prevent races. The claimant is the downstream
-state, the system doing the pull, not a human worker.
+The system moves the tickets in both cases, immediate
+move if there is capacity, and pull from the wait state
+when a slot opens. There is no claim to move it. The
+system is the mover, not a human worker, and not a
+downstream actor claiming it.
 
-- State: Wait state, example, unchanged
-- Claim: Held, by the puller for the next state
+- State: Wait state, example, unchanged, until the move
+- Claim: None, no claim to move is made
 - Priority: Carried, unchanged
-- WIP: Still counts against the wait state
+- WIP: Still counts against the wait state, until the move
 
 ## Event 12: Ticket Moved to Next State
 
