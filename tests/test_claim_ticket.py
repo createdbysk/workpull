@@ -10,7 +10,7 @@ from typing import TypedDict
 import pytest
 from click.testing import CliRunner
 
-from workpull.cli import cli
+from workpull.cli import HookResult, cli
 
 
 class Outcome(TypedDict, total=False):
@@ -92,7 +92,7 @@ def test_injected_run_hook(run_claim_ticket) -> None:
     with isolated_filesystem():
         env = dict(os.environ)
         env["CLAIM_TICKET_HOOK"] = "fake-hook"
-        result = run_claim_ticket("Develop", env, obj={"run_hook": lambda hook, env: (0, "ticket-1\n", "")})
+        result = run_claim_ticket("Develop", env, obj={"run_hook": lambda hook, env: HookResult(0, "ticket-1\n", "")})
     # THEN
     actual: Outcome = claim_ticket_outcome(result)
     assert expected == actual

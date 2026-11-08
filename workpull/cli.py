@@ -28,17 +28,24 @@ import tomllib
 from typing import Any
 
 import click
-from typing import Callable
+from typing import Callable, NamedTuple
 
-RunHook = Callable[[str, dict[str, str]], tuple[int, str, str]]
+
+class HookResult(NamedTuple):
+    returncode: int
+    stdout: str
+    stderr: str
+
+
+RunHook = Callable[[str, dict[str, str]], HookResult]
 
 _STATE_NAME = re.compile(r"^[A-Za-z0-9 _-]+$")
 
 
 def run_hook(
     hook_command: str, env: dict[str, str]
-) -> tuple[int, str, str]:
-    """Run a hook command, no shell. Returns (returncode, stdout, stderr).
+) -> HookResult:
+    """Run a hook command, no shell. Returns a HookResult.
 
     The hook command is in canonical POSIX form, on every
     platform: POSIX quoting, forward slashes for paths. It is
@@ -51,9 +58,9 @@ def run_hook(
     try:
         args = shlex.split(hook_command, posix=True)
     except ValueError as exc:
-        return 2, "", f"invalid hook command: {exc}\n"
+        return HookResult(2, "", f"invalid hook command: {exc}\n")
     if not args:
-        return 2, "", "empty hook command\n"
+        return HookResult(2, "", "empty hook command\n")
     hook_env = dict(os.environ)
     hook_env.update(env)
     try:
@@ -65,8 +72,8 @@ def run_hook(
             env=hook_env,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        return 2, "", f"hook failed to run: {exc}\n"
-    return result.returncode, result.stdout, result.stderr
+        return HookResult(2, "", f"hook failed to run: {exc}\n")
+    return HookResult(result.returncode, result.stdout, result.stderr)
 
 
 def validate_describe(view: object) -> str | None:
@@ -166,10 +173,10 @@ def claim_ticket(state: str, run_hook_fn: RunHook) -> None:
     if not hook:
         click.echo("CLAIM_TICKET_HOOK is not set", err=True)
         raise click.exceptions.Exit(2)
-    returncode, stdout, _ = run_hook_fn(hook, {"WORKPULL_STATE": state})
-    if returncode != 0:
-        raise click.exceptions.Exit(returncode)
-    ticket_id = stdout.strip()
+    result = run_hook_fn(hook, {"WORKPULL_STATE": state})
+    if result.returncode != 0:
+        raise click.exceptions.Exit(result.returncode)
+    ticket_id = result.stdout.strip()
     if not ticket_id:
         click.echo("claim-ticket hook returned no ticket id", err=True)
         raise click.exceptions.Exit(2)
@@ -182,15 +189,15 @@ def describe(run_hook_fn: RunHook) -> None:
     if not hook:
         click.echo("DESCRIBE_HOOK is not set", err=True)
         raise click.exceptions.Exit(2)
-    returncode, stdout, stderr = run_hook_fn(hook, {})
-    if returncode != 0:
-        if stderr:
-            click.echo(stderr, err=True, nl=False)
+    result = run_hook_fn(hook, {})
+    if result.returncode != 0:
+        if result.stderr:
+            click.echo(result.stderr, err=True, nl=False)
         else:
             click.echo("describe hook failed", err=True)
-        raise click.exceptions.Exit(returncode or 1)
+        raise click.exceptions.Exit(result.returncode or 1)
     try:
-        view = tomllib.loads(stdout)
+        view = tomllib.loads(result.stdout)
     except tomllib.TOMLDecodeError as exc:
         click.echo(
             f"describe hook output is not valid TOML: {exc}", err=True
