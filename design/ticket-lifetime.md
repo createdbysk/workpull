@@ -156,11 +156,13 @@ ticket just waits.
 
 ## Event 10: Slot Opened in Next State
 
-When the next state has capacity, that is an event to
-look for tickets in the wait state to move.
+When the system sees a ticket move out of a state, it
+knows capacity opened up. So it checks the previous
+column for an available ticket to take that slot. That
+is it.
 
 - State: Next state, example, unchanged, now below its
-  WIP limit
+  WIP limit, because a ticket moved out of it
 - Claim: None, unchanged
 - Action: The system pulls a ticket into the slot from
   the previous wait state, highest priority first, one
@@ -206,9 +208,14 @@ wait, check capacity, move or wait, until Done.
 Blocked is an action for the claimant. They need to
 unblock the ticket. It is part of the same work.
 
+Block is invisible if there is no PM conversation and
+reprioritization. No one cares if the worker who was
+blocked also handles the blocker.
+
 - State: Unchanged, the state the ticket was claimed in
 - Claim: Held, unchanged. The claimant owns the unblock.
-- Priority: Kept, unchanged
+- Priority: Kept, unchanged, unless a PM conversation
+  reprioritizes it
 - WIP: Occupies WIP, unchanged. A blocked ticket
   occupies WIP and keeps its priority.
 
@@ -228,19 +235,29 @@ decides whether the ticket keeps its priority.
 
 ## Event 16: Ticket Unblocked
 
-- State: Unchanged
+Blocker is only special when it leads to a conversation.
+Then it changes into reprioritization or discard. So
+there is no separate unblock event. Reprioritization is
+Event 2. The event left is discard, Event 17.
+
+- State: Unchanged, unless discarded
 - Claim: Held, unchanged, unless the ticket was discarded
-- Priority: Re-decided. Once it unblocks, there is
-  another conversation about priority.
+- Priority: Re-decided, if there was a conversation.
+  Once it unblocks, there is another conversation about
+  priority.
 - WIP: Occupies WIP, unchanged, unless the ticket was
   discarded to open WIP.
 
 ## Event 17: Ticket Discarded to Open WIP
 
+Discard is just a discard action. That is all. The
+backend decides how that affects the ticket. From the
+Workpull standpoint, the ticket leaves the system.
+That is all.
+
 - State: Discarded, no longer in a column
 - Claim: Released, no actor holds it
-- Priority: Not carried. The work is brought back into
-  the backlog later, as a new ticket, with a new priority.
+- Priority: Not carried
 - WIP: No longer counts against any state. WIP is opened.
 
 ## Done
