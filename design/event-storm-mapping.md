@@ -26,11 +26,10 @@ and designed does not mean implemented.
   Refinement is per ticket, prioritization is a column
   activity, in design/ticket-lifetime.md Event 2.
 - Gap, requirement: no. Gap, design / implementation:
-  yes. There is no prioritization command, no
-  claim-column command to lock the column for
-  prioritization, and no hook contract for setting a
-  fractional key. Claim-column is future only, in
-  design 005.
+  yes. There is no prioritization command, and no hook
+  contract for setting a fractional key. Column claim
+  is dropped, there is no begin / end lock, prioritize
+  is a move between tickets, error on race.
 
 ### Event 3: Ticket Claimed
 
@@ -151,15 +150,27 @@ and designed does not mean implemented.
 
 ## Summary of proved gaps
 
+Cleaned up 2026-11-08, after the wait-state rewrite.
+This mapping was written against the color version of
+the ticket lifetime. Events 5 to 12 in that version
+are superseded by design/ticket-lifetime.md, Events 1
+to 17, wait states, no colors.
+
 - Design / implementation gaps, requirements covered:
-  Event 1 origination, Event 2 prioritization /
-  claim-column, Event 6 move to wait state, Event 7
-  release, Event 10 pull / transition, Event 11 wait
-  on no capacity, Event 12 slot-open lookup, Blocked
-  as a command.
+  Event 1 origination, Event 2 prioritization, Event 6
+  move to wait state, Event 7 release, Event 10 pull /
+  transition, Event 11 wait on no capacity, Event 12
+  slot-open lookup, Blocked as a command.
 - Gaps at all levels, no requirement mapping:
-  Event 8 publish / subscribe, and Event 9, who claims
-  to move it, the downstream state / system as claimant.
+  Event 8 publish / subscribe, as originally written,
+  is closed by the immediate-move rule and by slot-open
+  as a move-out. Event 9, who claims to move it, the
+  downstream state / system as claimant, remains a gap
+  at the requirement level.
 - Not gaps: Event 3 claim-ticket, Event 4 refine as
   claim, Event 5 yellow as a signal, which is rejected,
-  not missing.
+  not missing. Claimed 10 versus waiting 100 is not
+  special, it is covered by claim-held, wait-state, and
+  slot-open. Begin / end prioritization is not a gap,
+  there is no begin / end lock, prioritize is a move
+  between tickets, error on race.

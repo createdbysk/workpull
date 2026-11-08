@@ -12,15 +12,12 @@ The goal is to get work done, not to start work.
   done. The prioritization step assigns priority values
   to tickets such that the values stay unique. That is
   all. There is no column claim.
-- Prioritization itself has a long mutex. Tell the system
-  begin prioritization. Only then you are allowed to
-  change the values. Then say end prioritization, and
-  the values lock.
 - Prioritize as a move between tickets. A ticket is moved
   above or below another ticket, to the top, or up or
   down one step. The user never types a fractional value.
   The system computes the midpoint key.
-- The catch is the race. The system can error if there
+- There is no begin / end lock for prioritization. The
+  catch is the race. The system can error if there
   is a conflict. It is a low occurrence race.
 - An order key lives in a dense order: between any two
   keys there is always another key, so an insert never

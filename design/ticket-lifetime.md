@@ -47,10 +47,10 @@ needed is a prioritization step that assigns priority
 values to tickets such that the values stay unique.
 That is all.
 
-Prioritization itself has a long mutex. Tell the system
-begin prioritization. Only then you are allowed to change
-the values. Then say end prioritization, and the values
-lock.
+There is no begin / end lock for prioritization.
+Prioritize as a move between tickets. The system can
+error if there is a conflict. It is a low occurrence
+race.
 
 - State: Backlog, example, unchanged
 - Claim: None, no actor holds it
