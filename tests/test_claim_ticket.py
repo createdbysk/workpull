@@ -1,15 +1,14 @@
 """Tests for workpull claim-ticket, through Click's runner."""
 
-import contextlib
 import os
 import sys
-import tempfile
 from pathlib import Path
 from typing import TypedDict
 
 import pytest
 from click.testing import CliRunner
 
+from tests.helpers import hook_command, isolated_filesystem
 from workpull.cli import HookResult, cli
 
 
@@ -17,23 +16,6 @@ class Outcome(TypedDict, total=False):
     exit_code: int
     output_contains: bool
     ticket_id: str | None
-
-
-@contextlib.contextmanager
-def isolated_filesystem():
-    """Temporary directory as working directory, cleaned up after."""
-    old = os.getcwd()
-    with tempfile.TemporaryDirectory() as tmp:
-        os.chdir(tmp)
-        try:
-            yield tmp
-        finally:
-            os.chdir(old)
-
-
-def hook_command(script: str) -> str:
-    """Hook command in canonical POSIX form, on every platform."""
-    return f"{Path(sys.executable).as_posix()} {script}"
 
 
 def write_mock_hook(ticket_id: str) -> str:
