@@ -122,7 +122,7 @@ def test_injected_run_hook(run_describe) -> None:
     with isolated_filesystem():
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = "fake-hook"
-        result = run_describe(env, obj={"run_hook": lambda hook, env=None: (0, TRIVIAL_VIEW, "")})
+        result = run_describe(env, obj={"run_hook": lambda hook, env: (0, TRIVIAL_VIEW, "")})
     # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual

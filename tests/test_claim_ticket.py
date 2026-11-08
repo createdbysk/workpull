@@ -92,7 +92,7 @@ def test_injected_run_hook(run_claim_ticket) -> None:
     with isolated_filesystem():
         env = dict(os.environ)
         env["CLAIM_TICKET_HOOK"] = "fake-hook"
-        result = run_claim_ticket("Develop", env, obj={"run_hook": lambda hook, env=None: (0, "ticket-1\n", "")})
+        result = run_claim_ticket("Develop", env, obj={"run_hook": lambda hook, env: (0, "ticket-1\n", "")})
     # THEN
     actual: Outcome = claim_ticket_outcome(result)
     assert expected == actual

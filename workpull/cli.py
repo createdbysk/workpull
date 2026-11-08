@@ -38,7 +38,7 @@ _STATE_NAME = re.compile(r"^[A-Za-z0-9 _-]+$")
 
 
 def run_hook(
-    hook_command: str, env: dict[str, str] | None = None
+    hook_command: str, env: dict[str, str] | None
 ) -> tuple[int, str, str]:
     """Run a hook command, no shell. Returns (returncode, stdout, stderr).
 
