@@ -16,7 +16,7 @@ change the color of a ticket. That is it.
 - Claim gives an actor exclusive access to act on that
   ticket.
 - Claim gives that actor, and only that actor, the ability
-  to change the ticket's color: yellow for on work, green
+  to change the ticket's color: yellow for in work, green
   for ready to move, red for blocked.
 - Claim itself does not move a ticket, does not change
   the ticket's state, and does not change its color. It

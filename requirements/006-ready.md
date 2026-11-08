@@ -13,7 +13,7 @@ signal changes.
   blocked, not ready. A white ticket is claimable.
 - Green means ready to move. When the work in a state is
   finished, the worker marks the ticket green.
-- Yellow means on work. Work in progress is shown yellow.
+- Yellow means in work. Work in progress is shown yellow.
   A yellow ticket is not ready to move.
 - Red means blocked. A red ticket is not ready to move.
 
@@ -28,5 +28,5 @@ signal changes.
   white. Its claim ended on the move, so no actor holds it,
   and no work has started in the new state yet.
 - Claim itself does not change the signal. A claimed ticket
-  stays white until the claiming actor marks it yellow, on
+  stays white until the claiming actor marks it yellow, in
   work.
