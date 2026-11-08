@@ -7,6 +7,7 @@ command's own test file.
 
 from typing import TypedDict
 
+import pytest
 from click.testing import CliRunner
 
 from workpull.cli import cli
@@ -17,12 +18,17 @@ class Outcome(TypedDict):
     has_all_commands: bool
 
 
-def test_top_level_help_lists_commands() -> None:
+@pytest.fixture
+def runner() -> CliRunner:
+    return CliRunner()
+
+
+def test_top_level_help_lists_commands(runner) -> None:
     # GIVEN
     commands = ["claim-ticket", "describe"]
     expected: Outcome = {"exit_code": 0, "has_all_commands": True}
     # WHEN
-    result = CliRunner().invoke(cli, ["--help"])
+    result = runner.invoke(cli, ["--help"])
     # THEN
     actual: Outcome = {
         "exit_code": result.exit_code,

@@ -18,11 +18,17 @@
     returncode, stdout, and stderr.
   - `validate_describe(view)`: checks the parsed TOML document
     against the design schema, returns an error string or None.
-  - `describe()`: reads `DESCRIBE_HOOK`, runs the hook, parses
-    stdout with `tomllib`, validates, prints the view on success,
+  - `describe(run_hook_fn)`: reads `DESCRIBE_HOOK`, runs the
+    hook through the injected `run_hook_fn`, parses stdout
+    with `tomllib`, validates, prints the view on success,
     returns a non-zero exit code on failure.
+  - `cli()`: composition root. Wires the real `run_hook` into
+    `ctx.obj`, unless a caller already supplied one, so tests
+    can inject a fake. Thin Click commands call the
+    implementations above with `ctx.obj["run_hook"]`.
 - `workpull/__main__.py`: entry point, calls `cli()`. No
-  programmatic path. Tests use Click's runner.
+  programmatic path. Tests use Click's runner, with `runner`
+  and `run_describe` injected as pytest fixtures.
 - `workpull/__init__.py`: package marker.
 - `adapters/mock_describe.py`: mock describe hook, prints the
   trivial Backlog/Done TOML view.
@@ -40,6 +46,9 @@ filesystem.
   parses as TOML with states Backlog and Done, transition Backlog -> Done,
   and wip_limits Backlog unlimited, Done not listed.
 - Missing hook: non-zero, no invented output.
+- Injected run hook: a fake `run_hook` supplied in `ctx.obj`
+  is used instead of the real one, CLI exit 0 with the
+  fake's view.
 - Failing hook: non-zero, no invented output.
 - Invalid TOML output: non-zero.
 - Transition to a state not in states: non-zero.

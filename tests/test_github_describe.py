@@ -10,6 +10,7 @@ here.
 import os
 import subprocess
 import sys
+import pytest
 import tomllib
 from pathlib import Path
 from typing import TypedDict
@@ -40,19 +41,22 @@ def parse_view(text: str) -> View:
     )
 
 
-def run_cli(env: dict[str, str]):
-    """Run `python -m workpull describe` with an explicit env."""
-    return subprocess.run(
-        [sys.executable, "-m", "workpull", "describe"],
-        cwd=ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+@pytest.fixture
+def run_cli():
+    def _run(env: dict[str, str]):
+        """Run `python -m workpull describe` with an explicit env."""
+        return subprocess.run(
+            [sys.executable, "-m", "workpull", "describe"],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    return _run
 
 
-def test_cli_via_github_adapter() -> None:
+def test_cli_via_github_adapter(run_cli) -> None:
     # GIVEN
     expected: Outcome = {
         "exit_code": 0,

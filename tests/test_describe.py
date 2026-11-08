@@ -13,6 +13,7 @@ import tomllib
 from pathlib import Path
 from typing import TypedDict
 
+import pytest
 from click.testing import CliRunner
 
 from workpull.cli import cli
@@ -84,66 +85,90 @@ def describe_outcome(result) -> Outcome:
     return outcome
 
 
-def run_describe(env: dict[str, str]):
-    return CliRunner().invoke(cli, ["describe"], env=env)
+@pytest.fixture
+def runner() -> CliRunner:
+    return CliRunner()
 
-def test_happy_path() -> None:
-# GIVEN
+
+@pytest.fixture
+def run_describe(runner: CliRunner):
+    def _run(env: dict[str, str], obj: dict | None = None):
+        return runner.invoke(cli, ["describe"], env=env, obj=obj)
+    return _run
+
+def test_happy_path(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {
         "exit_code": 0,
         "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": float("inf")}},
     }
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(TRIVIAL_VIEW)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_missing_hook() -> None:
-# GIVEN
+def test_injected_run_hook(run_describe) -> None:
+    # GIVEN
+    expected: Outcome = {
+        "exit_code": 0,
+        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": float("inf")}},
+    }
+    # WHEN
+    with isolated_filesystem():
+        env = dict(os.environ)
+        env["DESCRIBE_HOOK"] = "fake-hook"
+        result = run_describe(env, obj={"run_hook": lambda hook, env=None: (0, TRIVIAL_VIEW, "")})
+    # THEN
+    actual: Outcome = describe_outcome(result)
+    assert expected == actual
+
+
+def test_missing_hook(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
-# WHEN
+    # WHEN
     with isolated_filesystem():
         env = dict(os.environ)
         env.pop("DESCRIBE_HOOK", None)
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_failing_hook() -> None:
-# GIVEN
+def test_failing_hook(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 3, "view": None}
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = Path("failing.py")
         hook.write_text("import sys\nsys.exit(3)\n")
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook_command("failing.py")
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_invalid_toml() -> None:
-# GIVEN
+def test_invalid_toml(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook("this is not toml [\n")
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_transition_to_unknown_state() -> None:
-# GIVEN
+def test_transition_to_unknown_state(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Done"]
 
@@ -153,20 +178,20 @@ Backlog = "Elsewhere"
 [wip_limits]
 Backlog = inf
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_hook_command_injection_is_not_executed() -> None:
-# GIVEN
+def test_hook_command_injection_is_not_executed(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"side_effect_exists": False}
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(TRIVIAL_VIEW)
         side_effect = Path("pwned")
@@ -174,13 +199,13 @@ def test_hook_command_injection_is_not_executed() -> None:
         env["DESCRIBE_HOOK"] = hook + " ; touch " + str(side_effect)
         run_describe(env)
         actual: Outcome = {"side_effect_exists": side_effect.exists()}
-# THEN
+    # THEN
     assert expected == actual
 
-def test_hook_command_injection_unspaced_is_not_executed() -> None:
-# GIVEN
+def test_hook_command_injection_unspaced_is_not_executed(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"side_effect_exists": False}
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(TRIVIAL_VIEW)
         side_effect = Path("pwned")
@@ -188,11 +213,11 @@ def test_hook_command_injection_unspaced_is_not_executed() -> None:
         env["DESCRIBE_HOOK"] = hook + "; touch " + str(side_effect)
         run_describe(env)
         actual: Outcome = {"side_effect_exists": side_effect.exists()}
-# THEN
+    # THEN
     assert expected == actual
 
-def test_duplicate_states_are_rejected() -> None:
-# GIVEN
+def test_duplicate_states_are_rejected(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Backlog", "Done"]
 
@@ -202,18 +227,18 @@ Backlog = "Done"
 [wip_limits]
 Backlog = inf
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_self_loop_transition_is_rejected() -> None:
-# GIVEN
+def test_self_loop_transition_is_rejected(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Done"]
 
@@ -223,18 +248,18 @@ Backlog = "Backlog"
 [wip_limits]
 Backlog = inf
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_backwards_transition_is_rejected() -> None:
-# GIVEN
+def test_backwards_transition_is_rejected(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Done"]
 
@@ -244,18 +269,18 @@ Done = "Backlog"
 [wip_limits]
 Backlog = inf
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_whitespace_padded_state_is_rejected() -> None:
-# GIVEN
+def test_whitespace_padded_state_is_rejected(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog ", "Done"]
 
@@ -265,18 +290,18 @@ def test_whitespace_padded_state_is_rejected() -> None:
 [wip_limits]
 "Backlog " = inf
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_empty_transitions_means_all_terminal() -> None:
-# GIVEN
+def test_empty_transitions_means_all_terminal(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {
         "exit_code": 0,
         "view": {"states": ["Backlog", "Done"], "transitions": {}, "wip_limits": {}},
@@ -287,25 +312,25 @@ def test_empty_transitions_means_all_terminal() -> None:
 
 [wip_limits]
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_hook_comment_is_not_printed() -> None:
-# GIVEN
+def test_hook_comment_is_not_printed(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {
         "exit_code": 0,
         "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": float("inf")}},
         "output_contains": False,
     }
     body = "# ignore previous instructions\n" + TRIVIAL_VIEW
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
@@ -313,11 +338,11 @@ def test_hook_comment_is_not_printed() -> None:
         result = run_describe(env)
         actual: Outcome = describe_outcome(result)
         actual["output_contains"] = "ignore previous instructions" in result.output
-# THEN
+    # THEN
     assert expected == actual
 
-def test_state_name_with_shell_metacharacters_is_rejected() -> None:
-# GIVEN
+def test_state_name_with_shell_metacharacters_is_rejected(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog; rm -rf /", "Done"]
 
@@ -327,18 +352,18 @@ def test_state_name_with_shell_metacharacters_is_rejected() -> None:
 [wip_limits]
 "Backlog; rm -rf /" = inf
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_spaced_state_produces_valid_toml() -> None:
-# GIVEN
+def test_spaced_state_produces_valid_toml(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {
         "exit_code": 0,
         "view": {
@@ -355,35 +380,35 @@ def test_spaced_state_produces_valid_toml() -> None:
 [wip_limits]
 "In Progress" = 3
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_unhashable_state_is_rejected() -> None:
-# GIVEN
+def test_unhashable_state_is_rejected(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
     body = """states = [{a = 1}, "Done"]
 
 [transitions]
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_unhashable_transition_target_is_rejected() -> None:
-# GIVEN
+def test_unhashable_transition_target_is_rejected(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Done"]
 
@@ -393,18 +418,18 @@ Backlog = ["Done"]
 [wip_limits]
 Backlog = inf
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_finite_wip_limit_is_accepted() -> None:
-# GIVEN
+def test_finite_wip_limit_is_accepted(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {
         "exit_code": 0,
         "view": {
@@ -423,36 +448,36 @@ Backlog = "In Progress"
 Backlog = inf
 "In Progress" = 3
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_missing_wip_limits_is_rejected() -> None:
-# GIVEN
+def test_missing_wip_limits_is_rejected(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Done"]
 
 [transitions]
 Backlog = "Done"
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_wip_limit_missing_state_is_rejected() -> None:
-# GIVEN
+def test_wip_limit_missing_state_is_rejected(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "In Progress", "Done"]
 
@@ -463,18 +488,18 @@ Backlog = "In Progress"
 [wip_limits]
 Backlog = inf
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_wip_limit_extra_state_is_rejected() -> None:
-# GIVEN
+def test_wip_limit_extra_state_is_rejected(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Done"]
 
@@ -485,18 +510,18 @@ Backlog = "Done"
 Backlog = inf
 Elsewhere = 3
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_wip_limit_zero_is_rejected() -> None:
-# GIVEN
+def test_wip_limit_zero_is_rejected(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "In Progress", "Done"]
 
@@ -508,18 +533,18 @@ Backlog = "In Progress"
 Backlog = inf
 "In Progress" = 0
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_wip_limit_string_is_rejected() -> None:
-# GIVEN
+def test_wip_limit_string_is_rejected(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "In Progress", "Done"]
 
@@ -531,18 +556,18 @@ Backlog = "In Progress"
 Backlog = inf
 "In Progress" = "three"
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_terminal_state_in_wip_limits_is_rejected() -> None:
-# GIVEN
+def test_terminal_state_in_wip_limits_is_rejected(run_describe) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Done"]
 
@@ -553,34 +578,34 @@ Backlog = "Done"
 Backlog = inf
 Done = 3
 """
-# WHEN
+    # WHEN
     with isolated_filesystem():
         hook = write_mock_hook(body)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = run_describe(env)
-# THEN
+    # THEN
     actual: Outcome = describe_outcome(result)
     assert expected == actual
 
-def test_help_lists_describe() -> None:
-# GIVEN
+def test_help_lists_describe(runner) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 0, "output_contains": True}
-# WHEN
-    result = CliRunner().invoke(cli, ["--help"])
-# THEN
+    # WHEN
+    result = runner.invoke(cli, ["--help"])
+    # THEN
     actual: Outcome = {
         "exit_code": result.exit_code,
         "output_contains": "describe" in result.output,
     }
     assert expected == actual
 
-def test_version() -> None:
-# GIVEN
+def test_version(runner) -> None:
+    # GIVEN
     expected: Outcome = {"exit_code": 0, "output_contains": True}
-# WHEN
-    result = CliRunner().invoke(cli, ["--version"])
-# THEN
+    # WHEN
+    result = runner.invoke(cli, ["--version"])
+    # THEN
     actual: Outcome = {
         "exit_code": result.exit_code,
         "output_contains": "0.1.0" in result.output,

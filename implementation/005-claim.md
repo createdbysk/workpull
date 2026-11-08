@@ -18,15 +18,19 @@
     returns returncode, stdout, and stderr. `env`, when given,
     is merged over the process environment for the hook only.
     Describe calls it with no extra env.
-  - `claim_ticket(state)`: reads `CLAIM_TICKET_HOOK`, returns
-    exit 2 with no ticket invented when the hook is missing,
-    runs the hook with `WORKPULL_STATE` set to the state
-    argument, preserves the hook's exit code on failure,
-    returns exit 2 with no ticket invented when the hook
-    exits 0 but returns an empty ticket id, prints the
-    ticket id returned on stdout on success.
+  - `claim_ticket(state, run_hook_fn)`: reads
+    `CLAIM_TICKET_HOOK`, returns exit 2 with no ticket
+    invented when the hook is missing, runs the hook
+    through the injected `run_hook_fn` with `WORKPULL_STATE`
+    set to the state argument, preserves the hook's exit
+    code on failure, returns exit 2 with no ticket invented
+    when the hook exits 0 but returns an empty ticket id,
+    prints the ticket id returned on stdout on success.
+  - `cli()`: composition root, see implementation 001.
 - `tests/test_claim_ticket.py`: tests, driving the CLI through
-  Click's runner, with an explicit environment per test.
+  Click's runner, with an explicit environment per test, and
+  with `runner` and `run_claim_ticket` injected as pytest
+  fixtures.
 - `tests/test_workpull_cli.py`: top level help test, listing
   `claim-ticket` and `describe`.
 
@@ -48,6 +52,9 @@ filesystem.
   `describe`, in `tests/test_workpull_cli.py`.
 
 - Missing hook: no hook set, CLI exit 2, no ticket invented.
+- Injected run hook: a fake `run_hook` supplied in `ctx.obj`
+  is used instead of the real one, CLI exit 0, output is
+  the fake's ticket id.
 
 - Failing hook: hook exits 3, CLI exit 3, no ticket invented.
 - Empty ticket id: hook exits 0 but returns no ticket id,

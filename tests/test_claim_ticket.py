@@ -58,13 +58,21 @@ def claim_ticket_outcome(result) -> Outcome:
     return outcome
 
 
-def run_claim_ticket(state: str, env: dict[str, str]):
-    return CliRunner().invoke(cli, ["claim-ticket", state], env=env)
+@pytest.fixture
+def runner() -> CliRunner:
+    return CliRunner()
+
+
+@pytest.fixture
+def run_claim_ticket(runner: CliRunner):
+    def _run(state: str, env: dict[str, str], obj: dict | None = None):
+        return runner.invoke(cli, ["claim-ticket", state], env=env, obj=obj)
+    return _run
 
 
 @pytest.mark.parametrize("ticket_id", ["ticket-1", "0"])
 
-def test_claim_ticket_happy_path(ticket_id: str) -> None:
+def test_claim_ticket_happy_path(run_claim_ticket, ticket_id: str) -> None:
     # GIVEN
     expected: Outcome = {"exit_code": 0, "ticket_id": ticket_id}
     # WHEN
@@ -77,7 +85,20 @@ def test_claim_ticket_happy_path(ticket_id: str) -> None:
     actual: Outcome = claim_ticket_outcome(result)
     assert expected == actual
 
-def test_missing_hook() -> None:
+def test_injected_run_hook(run_claim_ticket) -> None:
+    # GIVEN
+    expected: Outcome = {"exit_code": 0, "ticket_id": "ticket-1"}
+    # WHEN
+    with isolated_filesystem():
+        env = dict(os.environ)
+        env["CLAIM_TICKET_HOOK"] = "fake-hook"
+        result = run_claim_ticket("Develop", env, obj={"run_hook": lambda hook, env=None: (0, "ticket-1\n", "")})
+    # THEN
+    actual: Outcome = claim_ticket_outcome(result)
+    assert expected == actual
+
+
+def test_missing_hook(run_claim_ticket) -> None:
     # GIVEN
     expected: Outcome = {"exit_code": 2, "ticket_id": None}
     # WHEN
@@ -89,7 +110,7 @@ def test_missing_hook() -> None:
     actual: Outcome = claim_ticket_outcome(result)
     assert expected == actual
 
-def test_failing_hook() -> None:
+def test_failing_hook(run_claim_ticket) -> None:
     # GIVEN
     expected: Outcome = {"exit_code": 3, "ticket_id": None}
     # WHEN
@@ -103,7 +124,7 @@ def test_failing_hook() -> None:
     actual: Outcome = claim_ticket_outcome(result)
     assert expected == actual
 
-def test_empty_ticket_id() -> None:
+def test_empty_ticket_id(run_claim_ticket) -> None:
     # GIVEN
     expected: Outcome = {"exit_code": 2, "ticket_id": None}
     # WHEN
@@ -117,11 +138,11 @@ def test_empty_ticket_id() -> None:
     actual: Outcome = claim_ticket_outcome(result)
     assert expected == actual
 
-def test_claim_ticket_help() -> None:
+def test_claim_ticket_help(runner) -> None:
     # GIVEN
     expected: Outcome = {"exit_code": 0, "output_contains": True}
     # WHEN
-    result = CliRunner().invoke(cli, ["claim-ticket", "--help"])
+    result = runner.invoke(cli, ["claim-ticket", "--help"])
     # THEN
     actual: Outcome = {
         "exit_code": result.exit_code,

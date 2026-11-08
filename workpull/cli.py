@@ -28,6 +28,13 @@ import tomllib
 from typing import Any
 
 import click
+from typing import Protocol
+
+
+class RunHook(Protocol):
+    def __call__(
+        self, hook_command: str, env: dict[str, str] | None = None
+    ) -> tuple[int, str, str]: ...
 
 _STATE_NAME = re.compile(r"^[A-Za-z0-9 _-]+$")
 
@@ -158,21 +165,13 @@ def format_describe(view: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-@click.group()
-@click.version_option("0.1.0", prog_name="workpull")
-def cli() -> None:
-    """Workpull: describe a backend's states and transitions."""
-
-
-@cli.command()
-@click.argument("state")
-def claim_ticket(state: str) -> None:
+def claim_ticket(state: str, run_hook_fn: RunHook) -> None:
     """Claim a single ticket in a state."""
     hook = os.environ.get("CLAIM_TICKET_HOOK")
     if not hook:
         click.echo("CLAIM_TICKET_HOOK is not set", err=True)
         raise click.exceptions.Exit(2)
-    returncode, stdout, _ = run_hook(hook, env={"WORKPULL_STATE": state})
+    returncode, stdout, _ = run_hook_fn(hook, env={"WORKPULL_STATE": state})
     if returncode != 0:
         raise click.exceptions.Exit(returncode)
     ticket_id = stdout.strip()
@@ -182,14 +181,13 @@ def claim_ticket(state: str) -> None:
     click.echo(ticket_id)
 
 
-@cli.command()
-def describe() -> None:
+def describe(run_hook_fn: RunHook) -> None:
     """Describe a backend's states and transitions."""
     hook = os.environ.get("DESCRIBE_HOOK")
     if not hook:
         click.echo("DESCRIBE_HOOK is not set", err=True)
         raise click.exceptions.Exit(2)
-    returncode, stdout, stderr = run_hook(hook)
+    returncode, stdout, stderr = run_hook_fn(hook)
     if returncode != 0:
         if stderr:
             click.echo(stderr, err=True, nl=False)
@@ -208,3 +206,33 @@ def describe() -> None:
         click.echo(f"invalid describe output: {error}", err=True)
         raise click.exceptions.Exit(2)
     click.echo(format_describe(view))
+
+
+@click.group()
+@click.version_option("0.1.0", prog_name="workpull")
+@click.pass_context
+def cli(ctx: click.Context) -> None:
+    """Workpull: describe a backend's states and transitions.
+
+    Composition root: this is where the real run_hook is
+    wired in. A caller that already supplied a run_hook,
+    in ctx.obj, keeps it, so tests can inject a fake.
+    """
+    if ctx.obj is None:
+        ctx.obj = {}
+    ctx.obj.setdefault("run_hook", run_hook)
+
+
+@cli.command(name="claim-ticket")
+@click.argument("state")
+@click.pass_context
+def claim_ticket_command(ctx: click.Context, state: str) -> None:
+    """Claim a single ticket in a state."""
+    claim_ticket(state, ctx.obj["run_hook"])
+
+
+@cli.command(name="describe")
+@click.pass_context
+def describe_command(ctx: click.Context) -> None:
+    """Describe a backend's states and transitions."""
+    describe(ctx.obj["run_hook"])
