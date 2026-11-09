@@ -42,6 +42,7 @@ def test_top_level_help_lists_commands(runner: CliRunner, normalize_help: Normal
               claim-ticket  Claim a single ticket in a state.
               describe      Describe a backend's states and transitions.
               prioritize    Move a ticket to a new priority.
+              release       Release a ticket's claim.
             """
         ),
     }

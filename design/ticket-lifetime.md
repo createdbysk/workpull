@@ -160,7 +160,8 @@ in work. There is no signal change.
 ## Event 6: Claim Released in Same Column
 
 The claiming actor releases the claim in the same column.
-Someone else can claim it again.
+Someone else can claim it again. The command is
+`release <ticket>`, ticket id only, no state.
 
 - State: Backlog, example, unchanged
 - Claim: Released, no actor holds it. The ticket is now

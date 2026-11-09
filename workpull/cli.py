@@ -258,6 +258,22 @@ def prioritize(ticket: str, after: str, run_hook_fn: RunHook) -> None:
     click.echo(ticket_id)
 
 
+def release(ticket: str, run_hook_fn: RunHook) -> None:
+    """Release a ticket's claim."""
+    hook = os.environ.get("RELEASE_HOOK")
+    if not hook:
+        click.echo("RELEASE_HOOK is not set", err=True)
+        raise click.exceptions.Exit(2)
+    result = run_hook_fn(hook, {"WORKPULL_TICKET": ticket})
+    if result.returncode != 0:
+        raise click.exceptions.Exit(result.returncode)
+    ticket_id = result.stdout.strip()
+    if not ticket_id:
+        click.echo("release hook returned no ticket id", err=True)
+        raise click.exceptions.Exit(2)
+    click.echo(ticket_id)
+
+
 @cli.command(name="adopt")
 @click.argument("ticket")
 @click.pass_context
@@ -281,6 +297,14 @@ def claim_ticket_command(ctx: click.Context, state: str) -> None:
 def prioritize_command(ctx: click.Context, ticket: str, after: str) -> None:
     """Move a ticket to a new priority."""
     prioritize(ticket, after, ctx.obj["run_hook"])
+
+
+@cli.command(name="release")
+@click.argument("ticket")
+@click.pass_context
+def release_command(ctx: click.Context, ticket: str) -> None:
+    """Release a ticket's claim."""
+    release(ticket, ctx.obj["run_hook"])
 
 
 @cli.command(name="describe")
