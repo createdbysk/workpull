@@ -86,14 +86,17 @@ than every other ticket ever adopted into the
 system. Adoption order is priority order, until a
 prioritize move changes it.
 
-## Event 2: Backlog Prioritized
+## Event 2: Ticket Prioritized
 
-A ticket cannot be claimed from Backlog until Backlog
-has been prioritized.
+A ticket cannot be claimed from Backlog until it has
+been prioritized.
 
 Refinement and prioritization are different steps.
-Refinement is per ticket. Prioritization is a column
-activity, ordering the tickets in a column.
+Refinement is per ticket. Prioritization is a move
+of one ticket, after another ticket.
+
+Priority has no relationship to state. It is carried
+with the ticket, in every state, until Done.
 
 Column claim has no value, and is dropped. What is
 needed is a prioritization step that assigns priority
@@ -101,23 +104,24 @@ values to tickets such that the values stay unique.
 That is all.
 
 There is no begin / end lock for prioritization.
-Prioritize as a move between tickets. The system can
+Prioritize as a move after a ticket. The system can
 error if there is a conflict. It is a low occurrence
-race.
+race. There is no ticket to move after at the top,
+so the top takes the sentinel `WORKPULL_TOP`.
 
 - State: Backlog, example, unchanged
 - Claim: None, no actor holds it
-- Priority: Set by prioritization, a column activity,
-  top to bottom, as a fractional order key carried with
-  the ticket. A ticket inserted between two tickets
-  takes the midpoint key between theirs. A ticket
-  inserted after the last ticket takes a key after the
-  last key. Order keys are stored as strings or
-  arbitrary-precision decimals, never as floats. When
-  keys get too long, the column is rebalanced once, back
-  to short keys. The ticket carries that key until Done,
-  unless a business priority change reprioritizes it
-  mid-flight, giving it a new order key.
+- Priority: Set by prioritization, top to bottom, as a
+  fractional order key carried with the ticket. A
+  ticket moved after another ticket takes the midpoint
+  key after that ticket. A ticket inserted after the
+  last ticket takes a key after the last key. Order
+  keys are stored as strings or arbitrary-precision
+  decimals, never as floats. When keys get too long,
+  the order is rebalanced once, back to short keys.
+  The ticket carries that key until Done, unless a
+  business priority change reprioritizes it mid-flight,
+  giving it a new order key.
 
 ## Event 3: Ticket Claimed
 

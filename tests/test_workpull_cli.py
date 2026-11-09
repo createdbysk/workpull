@@ -36,7 +36,7 @@ def test_top_level_help_lists_commands(runner, normalize_help) -> None:
               adopt         Adopt a ticket.
               claim-ticket  Claim a single ticket in a state.
               describe      Describe a backend's states and transitions.
-              prioritize    Move a ticket in a state, to a new priority.
+              prioritize    Move a ticket to a new priority.
             """
         ),
     }

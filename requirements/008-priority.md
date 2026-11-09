@@ -2,8 +2,11 @@
 
 ## Requirement
 
-Priority orders work, within a column and across columns.
-The goal is to get work done, not to start work.
+Priority orders work. The goal is to get work done, not
+to start work.
+
+Priority has no relationship to state. It is carried
+with the ticket, in every state, until Done.
 
 ## Priority value
 
@@ -12,10 +15,12 @@ The goal is to get work done, not to start work.
   done. The prioritization step assigns priority values
   to tickets such that the values stay unique. That is
   all. There is no column claim.
-- Prioritize as a move between tickets. A ticket is moved
-  above or below another ticket, to the top, or up or
-  down one step. The user never types a fractional value.
-  The system computes the midpoint key.
+- Prioritize as a move after a ticket. A ticket is moved
+  to just after another ticket. The user never types a
+  fractional value. The system computes the midpoint key.
+  There is no ticket to move after at the top, so the
+  top takes the sentinel `WORKPULL_TOP`. There is no
+  sentinel for the bottom: move after the last ticket.
 - There is no begin / end lock for prioritization. The
   catch is the race. The system can error if there
   is a conflict. It is a low occurrence race.
@@ -31,26 +36,26 @@ The goal is to get work done, not to start work.
   decimals, never as floats. A float cannot represent
   .1, .15, or .91 exactly, and midpoint calculations
   lose precision after many inserts.
-- When keys get too long, the column is rebalanced once,
+- When keys get too long, the order is rebalanced once,
   back to short keys, for example .1, .2, .3, top to
   bottom. Rebalancing is rare, and is the only operation
   that changes other tickets' keys.
 - Reprioritizing a ticket means giving it a new order
   key at its new position, by the midpoint rule above.
 
-## Priority within a column
+## Priority order
 
-- Within a column, priority is top to bottom, by fractional
-  value, smallest first.
+- Priority is top to bottom, by fractional value,
+  smallest first.
 - Priority is usually set at backlog refinement and
   carried till done.
-- If business priority changes, a column is
+- If business priority changes, a ticket is
   reprioritized mid flight, and the new order is
   carried forward from there.
-- A ticket entering a column takes its priority position
-  in that column. A higher priority ticket entering
-  later goes above a lower priority ticket already
-  there. It does not displace it.
+- A ticket entering a state takes its priority position
+  by that key, not by arrival order. A higher priority
+  ticket entering later goes above a lower priority
+  ticket already there. It does not displace it.
 
 ## Priority across columns
 

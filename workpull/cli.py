@@ -241,18 +241,20 @@ def adopt(ticket: str, run_hook_fn: RunHook) -> None:
     click.echo(ticket_id)
 
 
-def prioritize(
-    state: str,
-    ticket: str,
-    above: str | None,
-    below: str | None,
-    top: bool,
-    up: bool,
-    down: bool,
-    run_hook_fn: RunHook,
-) -> None:
-    """Move a ticket in a state, to a new priority."""
-    raise NotImplementedError
+def prioritize(ticket: str, after: str, run_hook_fn: RunHook) -> None:
+    """Move a ticket to a new priority."""
+    hook = os.environ.get("PRIORITIZE_HOOK")
+    if not hook:
+        click.echo("PRIORITIZE_HOOK is not set", err=True)
+        raise click.exceptions.Exit(2)
+    result = run_hook_fn(hook, {"WORKPULL_TICKET": ticket, "WORKPULL_AFTER": after})
+    if result.returncode != 0:
+        raise click.exceptions.Exit(result.returncode)
+    ticket_id = result.stdout.strip()
+    if not ticket_id:
+        click.echo("prioritize hook returned no ticket id", err=True)
+        raise click.exceptions.Exit(2)
+    click.echo(ticket_id)
 
 
 @cli.command(name="adopt")
@@ -272,26 +274,12 @@ def claim_ticket_command(ctx: click.Context, state: str) -> None:
 
 
 @cli.command(name="prioritize")
-@click.argument("state")
 @click.argument("ticket")
-@click.option("--above", "above", default=None)
-@click.option("--below", "below", default=None)
-@click.option("--top", "top", is_flag=True)
-@click.option("--up", "up", is_flag=True)
-@click.option("--down", "down", is_flag=True)
+@click.argument("after")
 @click.pass_context
-def prioritize_command(
-    ctx: click.Context,
-    state: str,
-    ticket: str,
-    above: str | None,
-    below: str | None,
-    top: bool,
-    up: bool,
-    down: bool,
-) -> None:
-    """Move a ticket in a state, to a new priority."""
-    prioritize(state, ticket, above, below, top, up, down, ctx.obj["run_hook"])
+def prioritize_command(ctx: click.Context, ticket: str, after: str) -> None:
+    """Move a ticket to a new priority."""
+    prioritize(ticket, after, ctx.obj["run_hook"])
 
 
 @cli.command(name="describe")

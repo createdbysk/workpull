@@ -45,8 +45,21 @@ def adopt_outcome(result: Result) -> TicketOutcome:
 
 @pytest.fixture
 def run_adopt(runner: CliRunner):
-    def _run(ticket: str, env: dict[str, str], obj: dict) -> Result:
-        return runner.invoke(cli, ["adopt", ticket], env=env, obj=obj)
+    def _run(ticket: str, env: dict[str, str], hook_result: HookResult) -> Result:
+        def _fake_run_hook(hook: str, hook_env: dict[str, str]) -> HookResult:
+            if hook != env.get("ADOPT_HOOK"):
+                return HookResult(1, "", "")
+            if hook_env != {"WORKPULL_TICKET": ticket}:
+                return HookResult(1, "", "")
+            return hook_result
+
+        return runner.invoke(
+            cli,
+            ["adopt", ticket],
+            env=env,
+            obj={"run_hook": _fake_run_hook},
+        )
+
     return _run
 
 
@@ -55,26 +68,26 @@ def test_adopt_happy_path(run_adopt, ticket_id: str) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 0, "ticket_id": ticket_id}
     # WHEN
-    with isolated_filesystem():
-        hook = write_mock_hook(ticket_id)
-        env = dict(os.environ)
-        env["ADOPT_HOOK"] = hook
-        result = run_adopt("ticket-1", env, {})
+    env = dict(os.environ)
+    env["ADOPT_HOOK"] = "fake-hook"
+    result = run_adopt("ticket-1", env, HookResult(0, f"{ticket_id}\n", ""))
     # THEN
     assert result.exception is None
     actual: TicketOutcome = adopt_outcome(result)
     assert expected == actual
 
 
-def test_injected_run_hook(run_adopt) -> None:
+def test_adopt_real_hook(runner) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 0, "ticket_id": "ticket-1"}
     # WHEN
     with isolated_filesystem():
+        hook = write_mock_hook("ticket-1")
         env = dict(os.environ)
-        env["ADOPT_HOOK"] = "fake-hook"
-        result = run_adopt("ticket-1", env, obj={"run_hook": lambda hook, env: HookResult(0, "ticket-1\n", "")})
+        env["ADOPT_HOOK"] = hook
+        result = runner.invoke(cli, ["adopt", "ticket-1"], env=env, obj={})
     # THEN
+    assert result.exception is None
     actual: TicketOutcome = adopt_outcome(result)
     assert expected == actual
 
@@ -83,10 +96,9 @@ def test_adopt_missing_hook(run_adopt) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 2, "ticket_id": None}
     # WHEN
-    with isolated_filesystem():
-        env = dict(os.environ)
-        env.pop("ADOPT_HOOK", None)
-        result = run_adopt("ticket-1", env, {})
+    env = dict(os.environ)
+    env.pop("ADOPT_HOOK", None)
+    result = run_adopt("ticket-1", env, HookResult(0, "ticket-1\n", ""))
     # THEN
     actual: TicketOutcome = adopt_outcome(result)
     assert expected == actual
@@ -96,12 +108,9 @@ def test_adopt_failing_hook(run_adopt) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 3, "ticket_id": None}
     # WHEN
-    with isolated_filesystem():
-        hook = Path("failing.py")
-        hook.write_text("import sys\nsys.exit(3)\n")
-        env = dict(os.environ)
-        env["ADOPT_HOOK"] = hook_command("failing.py")
-        result = run_adopt("ticket-1", env, {})
+    env = dict(os.environ)
+    env["ADOPT_HOOK"] = "fake-hook"
+    result = run_adopt("ticket-1", env, HookResult(3, "", ""))
     # THEN
     actual: TicketOutcome = adopt_outcome(result)
     assert expected == actual
@@ -111,12 +120,9 @@ def test_adopt_empty_ticket_id(run_adopt) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 2, "ticket_id": None}
     # WHEN
-    with isolated_filesystem():
-        hook = Path("empty.py")
-        hook.write_text("pass\n")
-        env = dict(os.environ)
-        env["ADOPT_HOOK"] = hook_command("empty.py")
-        result = run_adopt("ticket-1", env, {})
+    env = dict(os.environ)
+    env["ADOPT_HOOK"] = "fake-hook"
+    result = run_adopt("ticket-1", env, HookResult(0, "", ""))
     # THEN
     actual: TicketOutcome = adopt_outcome(result)
     assert expected == actual
