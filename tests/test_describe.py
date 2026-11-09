@@ -7,8 +7,8 @@ from typing import TypedDict
 
 import pytest
 from click.testing import CliRunner, Result
+from collections.abc import Callable
 
-from tests.helpers import hook_command, isolated_filesystem
 from workpull.cli import HookResult, cli
 
 TRIVIAL_VIEW = """states = ["Backlog", "Done"]
@@ -42,7 +42,7 @@ class HelpOutcome(TypedDict, total=False):
     help_text: str
 
 
-def write_mock_hook(body: str) -> str:
+def write_mock_hook(body: str, hook_command: Callable[[str], str]) -> str:
     hook = Path("mock_describe.py")
     hook.write_text(
         "import os, sys\n"
@@ -107,7 +107,7 @@ def test_happy_path(run_describe) -> None:
     assert expected == actual
 
 
-def test_describe_real_hook(runner) -> None:
+def test_describe_real_hook(runner, isolated_filesystem, hook_command) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
@@ -115,7 +115,7 @@ def test_describe_real_hook(runner) -> None:
     }
     # WHEN
     with isolated_filesystem():
-        hook = write_mock_hook(TRIVIAL_VIEW)
+        hook = write_mock_hook(TRIVIAL_VIEW, hook_command)
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook
         result = runner.invoke(cli, ["describe"], env=env, obj={})
@@ -181,12 +181,12 @@ Backlog = inf
     assert expected == actual
 
 
-def test_hook_command_injection_is_not_executed(runner) -> None:
+def test_hook_command_injection_is_not_executed(runner, isolated_filesystem, hook_command) -> None:
     # GIVEN
     expected: SideEffectOutcome = {"side_effect_exists": False}
     # WHEN
     with isolated_filesystem():
-        hook = write_mock_hook(TRIVIAL_VIEW)
+        hook = write_mock_hook(TRIVIAL_VIEW, hook_command)
         side_effect = Path("pwned")
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook + " ; touch " + str(side_effect)
@@ -196,12 +196,12 @@ def test_hook_command_injection_is_not_executed(runner) -> None:
     assert expected == actual
 
 
-def test_hook_command_injection_unspaced_is_not_executed(runner) -> None:
+def test_hook_command_injection_unspaced_is_not_executed(runner, isolated_filesystem, hook_command) -> None:
     # GIVEN
     expected: SideEffectOutcome = {"side_effect_exists": False}
     # WHEN
     with isolated_filesystem():
-        hook = write_mock_hook(TRIVIAL_VIEW)
+        hook = write_mock_hook(TRIVIAL_VIEW, hook_command)
         side_effect = Path("pwned")
         env = dict(os.environ)
         env["DESCRIBE_HOOK"] = hook + "; touch " + str(side_effect)

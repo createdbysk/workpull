@@ -6,8 +6,8 @@ from typing import TypedDict
 
 import pytest
 from click.testing import CliRunner, Result
+from collections.abc import Callable
 
-from tests.helpers import hook_command, isolated_filesystem
 from workpull.cli import HookResult, cli
 
 
@@ -21,7 +21,7 @@ class HelpOutcome(TypedDict, total=False):
     help_text: str
 
 
-def write_mock_hook(ticket_id: str) -> str:
+def write_mock_hook(ticket_id: str, hook_command: Callable[[str], str]) -> str:
     hook = Path("mock_adopt.py")
     hook.write_text(
         "import os, sys\n"
@@ -77,12 +77,12 @@ def test_adopt_happy_path(run_adopt, ticket_id: str) -> None:
     assert expected == actual
 
 
-def test_adopt_real_hook(runner) -> None:
+def test_adopt_real_hook(runner, isolated_filesystem, hook_command) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 0, "ticket_id": "ticket-1"}
     # WHEN
     with isolated_filesystem():
-        hook = write_mock_hook("ticket-1")
+        hook = write_mock_hook("ticket-1", hook_command)
         env = dict(os.environ)
         env["ADOPT_HOOK"] = hook
         result = runner.invoke(cli, ["adopt", "ticket-1"], env=env, obj={})
