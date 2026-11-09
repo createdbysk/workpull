@@ -12,6 +12,7 @@ Installation requires a venv. There is no supported system install.
 """
 
 import argparse
+from typing import Any
 import shutil
 import subprocess
 import sys
@@ -30,18 +31,18 @@ LINT_FILES = [
 ]
 
 
-def venv_python():
+def venv_python() -> Path:
     """Path to the venv Python, Windows or POSIX layout."""
     if sys.platform == "win32":
         return ROOT / ".venv" / "Scripts" / "python.exe"
     return ROOT / ".venv" / "bin" / "python"
 
 
-def run(command, **kwargs):
+def run(command: list[str], **kwargs: Any) -> int:
     return subprocess.run(command, cwd=ROOT, **kwargs).returncode
 
 
-def cmd_setup(_args):
+def cmd_setup(_args: argparse.Namespace) -> int:
     """Create .venv if missing, install workpull with dev deps."""
     import venv
 
@@ -62,14 +63,14 @@ def cmd_setup(_args):
     return 0
 
 
-def in_venv():
+def in_venv() -> bool:
     """True when running inside an activated venv."""
     import os
 
     return sys.prefix != sys.base_prefix or bool(os.environ.get("VIRTUAL_ENV"))
 
 
-def cmd_install(_args):
+def cmd_install(_args: argparse.Namespace) -> int:
     """Install only inside an activated venv. Refuses system installs."""
     if not in_venv():
         print(
@@ -82,12 +83,12 @@ def cmd_install(_args):
     return run([sys.executable, "-m", "pip", "install", "-e", ".[dev]"])
 
 
-def cmd_test(_args):
+def cmd_test(_args: argparse.Namespace) -> int:
     python = venv_python() if venv_python().exists() else sys.executable
     return run([str(python), "-m", "pytest", "tests", "-q"])
 
 
-def cmd_type(_args):
+def cmd_type(_args: argparse.Namespace) -> int:
     pyrefly = shutil.which("pyrefly")
     if not pyrefly:
         for name in ("pyrefly", "pyrefly.exe"):
@@ -106,7 +107,7 @@ def cmd_type(_args):
     )
 
 
-def cmd_lint(_args):
+def cmd_lint(_args: argparse.Namespace) -> int:
     pymarkdown = shutil.which("pymarkdown")
     if not pymarkdown:
         for name in ("pymarkdown", "pymarkdown.exe"):
@@ -123,7 +124,7 @@ def cmd_lint(_args):
     return run([pymarkdown, "--config", ".pymarkdown.json", "scan", *LINT_FILES])
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Workpull developer tasks.")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("setup", help="Create .venv and install dev deps.")

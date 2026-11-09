@@ -4,11 +4,18 @@ import os
 from pathlib import Path
 from typing import TypedDict
 
+import contextlib
+
 import pytest
 from click.testing import CliRunner, Result
 from collections.abc import Callable
 
 from workpull.cli import HookResult, cli
+
+RunPrioritize = Callable[[str, str, dict[str, str], HookResult], Result]
+IsolatedFilesystem = Callable[[], contextlib.AbstractContextManager[str]]
+HookCommand = Callable[[str], str]
+NormalizeHelp = Callable[[str], str]
 
 
 class TicketOutcome(TypedDict, total=False):
@@ -21,7 +28,7 @@ class HelpOutcome(TypedDict, total=False):
     help_text: str
 
 
-def write_mock_hook(ticket_id: str, after: str, hook_command: Callable[[str], str]) -> str:
+def write_mock_hook(ticket_id: str, after: str, hook_command: HookCommand) -> str:
     hook = Path("mock_prioritize.py")
     hook.write_text(
         "import os, sys\n"
@@ -46,7 +53,7 @@ def prioritize_outcome(result: Result) -> TicketOutcome:
 
 
 @pytest.fixture
-def run_prioritize(runner: CliRunner):
+def run_prioritize(runner: CliRunner) -> RunPrioritize:
     def _run(ticket: str, after: str, env: dict[str, str], hook_result: HookResult) -> Result:
         def _fake_run_hook(hook: str, hook_env: dict[str, str]) -> HookResult:
             if hook != env.get("PRIORITIZE_HOOK"):
@@ -66,7 +73,7 @@ def run_prioritize(runner: CliRunner):
 
 
 @pytest.mark.parametrize("ticket_id", ["ticket-1", "0"])
-def test_prioritize_happy_path(run_prioritize, ticket_id: str) -> None:
+def test_prioritize_happy_path(run_prioritize: RunPrioritize, ticket_id: str) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 0, "ticket_id": ticket_id}
     # WHEN
@@ -81,7 +88,7 @@ def test_prioritize_happy_path(run_prioritize, ticket_id: str) -> None:
     assert expected == actual
 
 
-def test_prioritize_top(run_prioritize) -> None:
+def test_prioritize_top(run_prioritize: RunPrioritize) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 0, "ticket_id": "ticket-1"}
     # WHEN
@@ -96,7 +103,7 @@ def test_prioritize_top(run_prioritize) -> None:
     assert expected == actual
 
 
-def test_prioritize_real_hook(runner, isolated_filesystem, hook_command) -> None:
+def test_prioritize_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 0, "ticket_id": "ticket-1"}
     # WHEN
@@ -113,7 +120,7 @@ def test_prioritize_real_hook(runner, isolated_filesystem, hook_command) -> None
     assert expected == actual
 
 
-def test_prioritize_missing_hook(run_prioritize) -> None:
+def test_prioritize_missing_hook(run_prioritize: RunPrioritize) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 2, "ticket_id": None}
     # WHEN
@@ -127,7 +134,7 @@ def test_prioritize_missing_hook(run_prioritize) -> None:
     assert expected == actual
 
 
-def test_prioritize_failing_hook(run_prioritize) -> None:
+def test_prioritize_failing_hook(run_prioritize: RunPrioritize) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 3, "ticket_id": None}
     # WHEN
@@ -139,7 +146,7 @@ def test_prioritize_failing_hook(run_prioritize) -> None:
     assert expected == actual
 
 
-def test_prioritize_empty_ticket_id(run_prioritize) -> None:
+def test_prioritize_empty_ticket_id(run_prioritize: RunPrioritize) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 2, "ticket_id": None}
     # WHEN
@@ -151,7 +158,7 @@ def test_prioritize_empty_ticket_id(run_prioritize) -> None:
     assert expected == actual
 
 
-def test_prioritize_help(runner, normalize_help) -> None:
+def test_prioritize_help(runner: CliRunner, normalize_help: NormalizeHelp) -> None:
     # GIVEN
     expected: HelpOutcome = {
         "exit_code": 0,

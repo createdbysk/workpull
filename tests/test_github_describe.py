@@ -12,11 +12,15 @@ import subprocess
 import sys
 import pytest
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 from typing import TypedDict
 
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTER = ROOT / "plugins" / "github" / "describe.py"
+
+
+RunCli = Callable[[dict[str, str]], subprocess.CompletedProcess[str]]
 
 
 class View(TypedDict):
@@ -42,8 +46,8 @@ def parse_view(text: str) -> View:
 
 
 @pytest.fixture
-def run_cli():
-    def _run(env: dict[str, str]):
+def run_cli() -> RunCli:
+    def _run(env: dict[str, str]) -> subprocess.CompletedProcess[str]:
         """Run `python -m workpull describe` with an explicit env."""
         return subprocess.run(
             [sys.executable, "-m", "workpull", "describe"],
@@ -56,7 +60,7 @@ def run_cli():
     return _run
 
 
-def test_cli_via_github_adapter(run_cli) -> None:
+def test_cli_via_github_adapter(run_cli: RunCli) -> None:
     # GIVEN
     expected: Outcome = {
         "exit_code": 0,

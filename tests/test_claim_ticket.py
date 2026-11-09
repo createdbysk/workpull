@@ -4,11 +4,18 @@ import os
 from pathlib import Path
 from typing import TypedDict
 
+import contextlib
+
 import pytest
 from click.testing import CliRunner, Result
 from collections.abc import Callable
 
 from workpull.cli import HookResult, cli
+
+RunClaimTicket = Callable[[str, dict[str, str], HookResult], Result]
+IsolatedFilesystem = Callable[[], contextlib.AbstractContextManager[str]]
+HookCommand = Callable[[str], str]
+NormalizeHelp = Callable[[str], str]
 
 
 class TicketOutcome(TypedDict, total=False):
@@ -21,7 +28,7 @@ class HelpOutcome(TypedDict, total=False):
     help_text: str
 
 
-def write_mock_hook(ticket_id: str, hook_command: Callable[[str], str]) -> str:
+def write_mock_hook(ticket_id: str, hook_command: HookCommand) -> str:
     hook = Path("mock_claim_ticket.py")
     hook.write_text(
         "import os, sys\n"
@@ -44,7 +51,7 @@ def claim_ticket_outcome(result: Result) -> TicketOutcome:
 
 
 @pytest.fixture
-def run_claim_ticket(runner: CliRunner):
+def run_claim_ticket(runner: CliRunner) -> RunClaimTicket:
     def _run(state: str, env: dict[str, str], hook_result: HookResult) -> Result:
         def _fake_run_hook(hook: str, hook_env: dict[str, str]) -> HookResult:
             if hook != env.get("CLAIM_TICKET_HOOK"):
@@ -64,7 +71,7 @@ def run_claim_ticket(runner: CliRunner):
 
 
 @pytest.mark.parametrize("ticket_id", ["ticket-1", "0"])
-def test_claim_ticket_happy_path(run_claim_ticket, ticket_id: str) -> None:
+def test_claim_ticket_happy_path(run_claim_ticket: RunClaimTicket, ticket_id: str) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 0, "ticket_id": ticket_id}
     # WHEN
@@ -77,7 +84,7 @@ def test_claim_ticket_happy_path(run_claim_ticket, ticket_id: str) -> None:
     assert expected == actual
 
 
-def test_claim_ticket_real_hook(runner, isolated_filesystem, hook_command) -> None:
+def test_claim_ticket_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 0, "ticket_id": "ticket-1"}
     # WHEN
@@ -92,7 +99,7 @@ def test_claim_ticket_real_hook(runner, isolated_filesystem, hook_command) -> No
     assert expected == actual
 
 
-def test_claim_ticket_missing_hook(run_claim_ticket) -> None:
+def test_claim_ticket_missing_hook(run_claim_ticket: RunClaimTicket) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 2, "ticket_id": None}
     # WHEN
@@ -104,7 +111,7 @@ def test_claim_ticket_missing_hook(run_claim_ticket) -> None:
     assert expected == actual
 
 
-def test_claim_ticket_failing_hook(run_claim_ticket) -> None:
+def test_claim_ticket_failing_hook(run_claim_ticket: RunClaimTicket) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 3, "ticket_id": None}
     # WHEN
@@ -116,7 +123,7 @@ def test_claim_ticket_failing_hook(run_claim_ticket) -> None:
     assert expected == actual
 
 
-def test_claim_ticket_empty_ticket_id(run_claim_ticket) -> None:
+def test_claim_ticket_empty_ticket_id(run_claim_ticket: RunClaimTicket) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 2, "ticket_id": None}
     # WHEN
@@ -128,7 +135,7 @@ def test_claim_ticket_empty_ticket_id(run_claim_ticket) -> None:
     assert expected == actual
 
 
-def test_claim_ticket_help(runner, normalize_help) -> None:
+def test_claim_ticket_help(runner: CliRunner, normalize_help: NormalizeHelp) -> None:
     # GIVEN
     expected: HelpOutcome = {
         "exit_code": 0,

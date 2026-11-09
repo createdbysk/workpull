@@ -5,11 +5,18 @@ import tomllib
 from pathlib import Path
 from typing import TypedDict
 
+import contextlib
+
 import pytest
 from click.testing import CliRunner, Result
 from collections.abc import Callable
 
 from workpull.cli import HookResult, cli
+
+RunDescribe = Callable[[dict[str, str], HookResult], Result]
+IsolatedFilesystem = Callable[[], contextlib.AbstractContextManager[str]]
+HookCommand = Callable[[str], str]
+NormalizeHelp = Callable[[str], str]
 
 TRIVIAL_VIEW = """states = ["Backlog", "Done"]
 
@@ -42,7 +49,7 @@ class HelpOutcome(TypedDict, total=False):
     help_text: str
 
 
-def write_mock_hook(body: str, hook_command: Callable[[str], str]) -> str:
+def write_mock_hook(body: str, hook_command: HookCommand) -> str:
     hook = Path("mock_describe.py")
     hook.write_text(
         "import os, sys\n"
@@ -72,7 +79,7 @@ def describe_outcome(result: Result) -> DescribeOutcome:
 
 
 @pytest.fixture
-def run_describe(runner: CliRunner):
+def run_describe(runner: CliRunner) -> RunDescribe:
     def _run(env: dict[str, str], hook_result: HookResult) -> Result:
         def _fake_run_hook(hook: str, hook_env: dict[str, str]) -> HookResult:
             if hook != env.get("DESCRIBE_HOOK"):
@@ -91,7 +98,7 @@ def run_describe(runner: CliRunner):
     return _run
 
 
-def test_happy_path(run_describe) -> None:
+def test_happy_path(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
@@ -107,7 +114,7 @@ def test_happy_path(run_describe) -> None:
     assert expected == actual
 
 
-def test_describe_real_hook(runner, isolated_filesystem, hook_command) -> None:
+def test_describe_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
@@ -125,7 +132,7 @@ def test_describe_real_hook(runner, isolated_filesystem, hook_command) -> None:
     assert expected == actual
 
 
-def test_missing_hook(run_describe) -> None:
+def test_missing_hook(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     # WHEN
@@ -137,7 +144,7 @@ def test_missing_hook(run_describe) -> None:
     assert expected == actual
 
 
-def test_failing_hook(run_describe) -> None:
+def test_failing_hook(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 3, "view": None}
     # WHEN
@@ -149,7 +156,7 @@ def test_failing_hook(run_describe) -> None:
     assert expected == actual
 
 
-def test_invalid_toml(run_describe) -> None:
+def test_invalid_toml(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     # WHEN
@@ -161,7 +168,7 @@ def test_invalid_toml(run_describe) -> None:
     assert expected == actual
 
 
-def test_transition_to_unknown_state(run_describe) -> None:
+def test_transition_to_unknown_state(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Done"]
@@ -181,7 +188,7 @@ Backlog = inf
     assert expected == actual
 
 
-def test_hook_command_injection_is_not_executed(runner, isolated_filesystem, hook_command) -> None:
+def test_hook_command_injection_is_not_executed(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
     # GIVEN
     expected: SideEffectOutcome = {"side_effect_exists": False}
     # WHEN
@@ -196,7 +203,7 @@ def test_hook_command_injection_is_not_executed(runner, isolated_filesystem, hoo
     assert expected == actual
 
 
-def test_hook_command_injection_unspaced_is_not_executed(runner, isolated_filesystem, hook_command) -> None:
+def test_hook_command_injection_unspaced_is_not_executed(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
     # GIVEN
     expected: SideEffectOutcome = {"side_effect_exists": False}
     # WHEN
@@ -211,7 +218,7 @@ def test_hook_command_injection_unspaced_is_not_executed(runner, isolated_filesy
     assert expected == actual
 
 
-def test_duplicate_states_are_rejected(run_describe) -> None:
+def test_duplicate_states_are_rejected(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Backlog", "Done"]
@@ -231,7 +238,7 @@ Backlog = inf
     assert expected == actual
 
 
-def test_self_loop_transition_is_rejected(run_describe) -> None:
+def test_self_loop_transition_is_rejected(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Done"]
@@ -251,7 +258,7 @@ Backlog = inf
     assert expected == actual
 
 
-def test_backwards_transition_is_rejected(run_describe) -> None:
+def test_backwards_transition_is_rejected(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Done"]
@@ -271,7 +278,7 @@ Backlog = inf
     assert expected == actual
 
 
-def test_whitespace_padded_state_is_rejected(run_describe) -> None:
+def test_whitespace_padded_state_is_rejected(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog ", "Done"]
@@ -291,7 +298,7 @@ def test_whitespace_padded_state_is_rejected(run_describe) -> None:
     assert expected == actual
 
 
-def test_empty_transitions_means_all_terminal(run_describe) -> None:
+def test_empty_transitions_means_all_terminal(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
@@ -312,7 +319,7 @@ def test_empty_transitions_means_all_terminal(run_describe) -> None:
     assert expected == actual
 
 
-def test_hook_comment_is_not_printed(run_describe) -> None:
+def test_hook_comment_is_not_printed(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
@@ -330,7 +337,7 @@ def test_hook_comment_is_not_printed(run_describe) -> None:
     assert expected == actual
 
 
-def test_state_name_with_shell_metacharacters_is_rejected(run_describe) -> None:
+def test_state_name_with_shell_metacharacters_is_rejected(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog; rm -rf /", "Done"]
@@ -350,7 +357,7 @@ def test_state_name_with_shell_metacharacters_is_rejected(run_describe) -> None:
     assert expected == actual
 
 
-def test_spaced_state_produces_valid_toml(run_describe) -> None:
+def test_spaced_state_produces_valid_toml(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
@@ -377,7 +384,7 @@ def test_spaced_state_produces_valid_toml(run_describe) -> None:
     assert expected == actual
 
 
-def test_unhashable_state_is_rejected(run_describe) -> None:
+def test_unhashable_state_is_rejected(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = [{a = 1}, "Done"]
@@ -393,7 +400,7 @@ def test_unhashable_state_is_rejected(run_describe) -> None:
     assert expected == actual
 
 
-def test_unhashable_transition_target_is_rejected(run_describe) -> None:
+def test_unhashable_transition_target_is_rejected(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Done"]
@@ -413,7 +420,7 @@ Backlog = inf
     assert expected == actual
 
 
-def test_finite_wip_limit_is_accepted(run_describe) -> None:
+def test_finite_wip_limit_is_accepted(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
@@ -442,7 +449,7 @@ Backlog = inf
     assert expected == actual
 
 
-def test_missing_wip_limits_is_rejected(run_describe) -> None:
+def test_missing_wip_limits_is_rejected(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Done"]
@@ -459,7 +466,7 @@ Backlog = "Done"
     assert expected == actual
 
 
-def test_wip_limit_missing_state_is_rejected(run_describe) -> None:
+def test_wip_limit_missing_state_is_rejected(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "In Progress", "Done"]
@@ -480,7 +487,7 @@ Backlog = inf
     assert expected == actual
 
 
-def test_wip_limit_extra_state_is_rejected(run_describe) -> None:
+def test_wip_limit_extra_state_is_rejected(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Done"]
@@ -501,7 +508,7 @@ Elsewhere = 3
     assert expected == actual
 
 
-def test_wip_limit_zero_is_rejected(run_describe) -> None:
+def test_wip_limit_zero_is_rejected(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "In Progress", "Done"]
@@ -523,7 +530,7 @@ Backlog = inf
     assert expected == actual
 
 
-def test_wip_limit_string_is_rejected(run_describe) -> None:
+def test_wip_limit_string_is_rejected(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "In Progress", "Done"]
@@ -545,7 +552,7 @@ Backlog = inf
     assert expected == actual
 
 
-def test_terminal_state_in_wip_limits_is_rejected(run_describe) -> None:
+def test_terminal_state_in_wip_limits_is_rejected(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog", "Done"]
@@ -566,7 +573,7 @@ Done = 3
     assert expected == actual
 
 
-def test_describe_help(runner, normalize_help) -> None:
+def test_describe_help(runner: CliRunner, normalize_help: NormalizeHelp) -> None:
     # GIVEN
     expected: HelpOutcome = {
         "exit_code": 0,
@@ -590,7 +597,7 @@ def test_describe_help(runner, normalize_help) -> None:
     assert expected == actual
 
 
-def test_version(runner) -> None:
+def test_version(runner: CliRunner) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 0, "output_contains": True}
     # WHEN

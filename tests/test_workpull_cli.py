@@ -7,6 +7,11 @@ command's own test file.
 
 from typing import TypedDict
 
+from click.testing import CliRunner
+from collections.abc import Callable
+
+NormalizeHelp = Callable[[str], str]
+
 from workpull.cli import cli
 
 
@@ -15,7 +20,7 @@ class Outcome(TypedDict):
     help_text: str
 
 
-def test_top_level_help_lists_commands(runner, normalize_help) -> None:
+def test_top_level_help_lists_commands(runner: CliRunner, normalize_help: NormalizeHelp) -> None:
     # GIVEN
     expected: Outcome = {
         "exit_code": 0,

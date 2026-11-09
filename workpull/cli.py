@@ -221,7 +221,8 @@ def cli(ctx: click.Context) -> None:
     in ctx.obj, keeps it, so tests can inject a fake.
     """
     if ctx.obj is None:
-        ctx.obj = {}
+        empty_obj: dict[str, RunHook] = {}
+        ctx.obj = empty_obj
     ctx.obj.setdefault("run_hook", run_hook)
 
 
