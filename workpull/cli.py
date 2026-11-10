@@ -293,6 +293,22 @@ def count(state: str, run_hook_fn: RunHook) -> None:
     click.echo(result.stdout.strip())
 
 
+def get_state(ticket: str, run_hook_fn: RunHook) -> None:
+    """Get a ticket's current state."""
+    hook = os.environ.get("GET_STATE_HOOK")
+    if not hook:
+        click.echo("GET_STATE_HOOK is not set", err=True)
+        raise click.exceptions.Exit(2)
+    result = run_hook_fn(hook, {"WORKPULL_TICKET": ticket})
+    if result.returncode != 0:
+        raise click.exceptions.Exit(result.returncode)
+    state = result.stdout.strip()
+    if not state:
+        click.echo("get-state hook returned no state", err=True)
+        raise click.exceptions.Exit(2)
+    click.echo(state)
+
+
 def transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> None:
     """Move a ticket to a wait state."""
     hook = os.environ.get("TRANSITION_HOOK")
@@ -348,6 +364,14 @@ def release_command(ctx: click.Context, ticket: str) -> None:
 def count_command(ctx: click.Context, state: str) -> None:
     """Count tickets in a state."""
     count(state, ctx.obj["run_hook"])
+
+
+@cli.command(name="get-state")
+@click.argument("ticket")
+@click.pass_context
+def get_state_command(ctx: click.Context, ticket: str) -> None:
+    """Get a ticket's current state."""
+    get_state(ticket, ctx.obj["run_hook"])
 
 
 @cli.command(name="transition")

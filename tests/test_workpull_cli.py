@@ -42,6 +42,7 @@ def test_top_level_help_lists_commands(runner: CliRunner, normalize_help: Normal
               claim-ticket  Claim a single ticket in a state.
               count         Count tickets in a state.
               describe      Describe a backend's states and transitions.
+              get-state     Get a ticket's current state.
               prioritize    Move a ticket to a new priority.
               release       Release a ticket's claim.
               transition    Move a ticket to a wait state.
