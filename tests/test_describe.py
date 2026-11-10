@@ -3,7 +3,7 @@
 import os
 import tomllib
 from pathlib import Path
-from typing import TypedDict
+from typing import NamedTuple, TypedDict
 
 import contextlib
 
@@ -30,7 +30,7 @@ Done = {work = inf, wait = inf}
 
 
 # A WIP limit is a positive int, or inf, the only float allowed.
-class WipLimits(TypedDict, total=False):
+class WipLimits(NamedTuple):
     work: int | float
     wait: int | float
 
@@ -72,7 +72,10 @@ def parse_view(text: str) -> View:
     return View(
         states=parsed["states"],
         transitions=parsed["transitions"],
-        wip_limits=parsed["wip_limits"],
+        wip_limits={
+            state: WipLimits(work=limits["work"], wait=limits["wait"])
+            for state, limits in parsed["wip_limits"].items()
+        },
     )
 
 
@@ -109,7 +112,7 @@ def test_happy_path(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": {"work": float("inf"), "wait": 3}, "Done": {"work": float("inf"), "wait": float("inf")}}},
+        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": WipLimits(work=float("inf"), wait=3), "Done": WipLimits(work=float("inf"), wait=float("inf"))}},
     }
     # WHEN
     env = dict(os.environ)
@@ -125,7 +128,7 @@ def test_describe_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFile
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": {"work": float("inf"), "wait": 3}, "Done": {"work": float("inf"), "wait": float("inf")}}},
+        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": WipLimits(work=float("inf"), wait=3), "Done": WipLimits(work=float("inf"), wait=float("inf"))}},
     }
     # WHEN
     with isolated_filesystem():
@@ -314,7 +317,7 @@ def test_empty_transitions_means_all_terminal(run_describe: RunDescribe) -> None
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {}, "wip_limits": {"Backlog": {"work": float("inf"), "wait": 3}, "Done": {"work": float("inf"), "wait": float("inf")}}},
+        "view": {"states": ["Backlog", "Done"], "transitions": {}, "wip_limits": {"Backlog": WipLimits(work=float("inf"), wait=3), "Done": WipLimits(work=float("inf"), wait=float("inf"))}},
     }
     body = """states = ["Backlog", "Done"]
 
@@ -337,7 +340,7 @@ def test_hook_comment_is_not_printed(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": {"work": float("inf"), "wait": 3}, "Done": {"work": float("inf"), "wait": float("inf")}}},
+        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": WipLimits(work=float("inf"), wait=3), "Done": WipLimits(work=float("inf"), wait=float("inf"))}},
         "output_contains": False,
     }
     body = "# ignore previous instructions\n" + TRIVIAL_VIEW
@@ -379,7 +382,7 @@ def test_spaced_state_produces_valid_toml(run_describe: RunDescribe) -> None:
         "view": {
             "states": ["In Progress", "Done"],
             "transitions": {"In Progress": "Done"},
-            "wip_limits": {"In Progress": {"work": 3, "wait": 2}, "Done": {"work": float("inf"), "wait": float("inf")}},
+            "wip_limits": {"In Progress": WipLimits(work=3, wait=2), "Done": WipLimits(work=float("inf"), wait=float("inf"))},
         },
     }
     body = """states = ["In Progress", "Done"]
@@ -444,7 +447,7 @@ def test_finite_wip_limit_is_accepted(run_describe: RunDescribe) -> None:
         "view": {
             "states": ["Backlog", "In Progress", "Done"],
             "transitions": {"Backlog": "In Progress", "In Progress": "Done"},
-            "wip_limits": {"Backlog": {"work": float("inf"), "wait": 3}, "In Progress": {"work": 3, "wait": 2}, "Done": {"work": float("inf"), "wait": float("inf")}},
+            "wip_limits": {"Backlog": WipLimits(work=float("inf"), wait=3), "In Progress": WipLimits(work=3, wait=2), "Done": WipLimits(work=float("inf"), wait=float("inf"))},
         },
     }
     body = """states = ["Backlog", "In Progress", "Done"]
@@ -475,9 +478,9 @@ def test_two_wip_limits_happy_path(run_describe: RunDescribe) -> None:
             "states": ["Backlog", "In Progress", "Done"],
             "transitions": {"Backlog": "In Progress", "In Progress": "Done"},
             "wip_limits": {
-                "Backlog": {"work": float("inf"), "wait": 3},
-                "In Progress": {"work": 3, "wait": 2},
-                "Done": {"work": float("inf"), "wait": 2},
+                "Backlog": WipLimits(work=float("inf"), wait=3),
+                "In Progress": WipLimits(work=3, wait=2),
+                "Done": WipLimits(work=float("inf"), wait=2),
             },
         },
     }
@@ -506,7 +509,7 @@ def test_terminal_wait_limit_is_accepted(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": {"work": float("inf"), "wait": 3}, "Done": {"work": float("inf"), "wait": 2}}},
+        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": WipLimits(work=float("inf"), wait=3), "Done": WipLimits(work=float("inf"), wait=2)}},
     }
     body = """states = ["Backlog", "Done"]
 
@@ -722,7 +725,7 @@ def test_terminal_finite_limits_are_accepted(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": {"work": float("inf"), "wait": 3}, "Done": {"work": 3, "wait": 2}}},
+        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": WipLimits(work=float("inf"), wait=3), "Done": WipLimits(work=3, wait=2)}},
     }
     body = """states = ["Backlog", "Done"]
 
