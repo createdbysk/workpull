@@ -23,10 +23,15 @@ ADAPTER = ROOT / "plugins" / "github" / "describe.py"
 RunCli = Callable[[dict[str, str]], subprocess.CompletedProcess[str]]
 
 
+class WipLimits(TypedDict, total=False):
+    work: int | float
+    wait: int | float
+
+
 class View(TypedDict):
     states: list[str]
     transitions: dict[str, str]
-    wip_limits: dict[str, int | float]
+    wip_limits: dict[str, WipLimits]
 
 
 class Outcome(TypedDict, total=False):
@@ -64,7 +69,7 @@ def test_cli_via_github_adapter(run_cli: RunCli) -> None:
     # GIVEN
     expected: Outcome = {
         "exit_code": 0,
-        "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": float("inf")}},
+        "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": {"work": float("inf"), "wait": 3}, "Closed": {"work": float("inf"), "wait": float("inf")}}},
     }
     env = dict(os.environ)
     env["DESCRIBE_HOOK"] = f"{Path(sys.executable).as_posix()} {ADAPTER.as_posix()}"
@@ -81,7 +86,7 @@ def test_adapter_direct_output_is_exact() -> None:
     # GIVEN
     expected: Outcome = {
         "exit_code": 0,
-        "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": float("inf")}},
+        "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": {"work": float("inf"), "wait": 3}, "Closed": {"work": float("inf"), "wait": float("inf")}}},
         "output_contains": False,
     }
     # WHEN

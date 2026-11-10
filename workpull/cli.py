@@ -88,10 +88,11 @@ def validate_describe(view: object) -> str | None:
       list, by list position. A self-loop, or a target at or
       before the source, is rejected. An empty transitions table is
       allowed, and means every state is terminal.
-    - wip_limits: table with exactly one entry per non-terminal
-      state, and no entry for a terminal state. Each value is
-      a positive integer, or inf for unlimited. Terminal states
-      are unlimited by definition, and are not listed.
+    - wip_limits: table with exactly one entry per state.
+      Each entry is an inline table with exactly work and
+      wait, each a positive integer, or inf for unlimited.
+      There is no other constraint on the values: the
+      backend decides them, for every state.
     """
     if not isinstance(view, dict):
         return "describe output is not a TOML document"
@@ -128,20 +129,21 @@ def validate_describe(view: object) -> str | None:
     wip_limits = view["wip_limits"]
     if not isinstance(wip_limits, dict):
         return "wip_limits must be a table"
-    non_terminal = set(transitions)
-    terminal = set(states) - non_terminal
-    if set(wip_limits) & terminal:
-        return "terminal state must not be in wip_limits"
-    if set(wip_limits) != non_terminal:
-        return "wip_limits must contain exactly one entry per non-terminal state"
-    for state, limit in wip_limits.items():
-        if isinstance(limit, bool):
-            return f"invalid wip_limit: {state!r} -> {limit!r}"
-        if isinstance(limit, float):
-            if limit != float("inf"):
-                return f"invalid wip_limit: {state!r} -> {limit!r}"
-        elif not isinstance(limit, int) or limit < 1:
-            return f"invalid wip_limit: {state!r} -> {limit!r}"
+    if set(wip_limits) != set(states):
+        return "wip_limits must contain exactly one entry per state"
+    for state, limits in wip_limits.items():
+        if not isinstance(limits, dict):
+            return f"invalid wip_limits: {state!r} -> {limits!r}"
+        if set(limits) != {"work", "wait"}:
+            return f"wip_limits for {state!r} must contain exactly work and wait"
+        for field, limit in limits.items():
+            if isinstance(limit, bool):
+                return f"invalid wip_limit: {state!r} -> {field} {limit!r}"
+            if isinstance(limit, float):
+                if limit != float("inf"):
+                    return f"invalid wip_limit: {state!r} -> {field} {limit!r}"
+            elif not isinstance(limit, int) or limit < 1:
+                return f"invalid wip_limit: {state!r} -> {field} {limit!r}"
     return None
 
 
@@ -160,10 +162,10 @@ def format_describe(view: dict[str, Any]) -> str:
     lines.append("")
     lines.append("[wip_limits]")
     for state in view["states"]:
-        if state in view["transitions"]:
-            limit = view["wip_limits"][state]
-            value = "inf" if limit == float("inf") else str(limit)
-            lines.append(f'"{state}" = {value}')
+        limits = view["wip_limits"][state]
+        work = "inf" if limits["work"] == float("inf") else str(limits["work"])
+        wait = "inf" if limits["wait"] == float("inf") else str(limits["wait"])
+        lines.append(f'"{state}" = {{work = {work}, wait = {wait}}}')
     return "\n".join(lines)
 
 

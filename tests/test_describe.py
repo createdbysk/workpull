@@ -24,14 +24,20 @@ TRIVIAL_VIEW = """states = ["Backlog", "Done"]
 Backlog = "Done"
 
 [wip_limits]
-Backlog = inf
+Backlog = {work = inf, wait = 3}
+Done = {work = inf, wait = inf}
 """
+
+
+class WipLimits(TypedDict, total=False):
+    work: int | float
+    wait: int | float
 
 
 class View(TypedDict):
     states: list[str]
     transitions: dict[str, str]
-    wip_limits: dict[str, int | float]
+    wip_limits: dict[str, WipLimits]
 
 
 class DescribeOutcome(TypedDict, total=False):
@@ -102,7 +108,7 @@ def test_happy_path(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": float("inf")}},
+        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": {"work": float("inf"), "wait": 3}, "Done": {"work": float("inf"), "wait": float("inf")}}},
     }
     # WHEN
     env = dict(os.environ)
@@ -118,7 +124,7 @@ def test_describe_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFile
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": float("inf")}},
+        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": {"work": float("inf"), "wait": 3}, "Done": {"work": float("inf"), "wait": float("inf")}}},
     }
     # WHEN
     with isolated_filesystem():
@@ -177,7 +183,8 @@ def test_transition_to_unknown_state(run_describe: RunDescribe) -> None:
 Backlog = "Elsewhere"
 
 [wip_limits]
-Backlog = inf
+Backlog = {work = inf, wait = 3}
+Done = {work = inf, wait = inf}
 """
     # WHEN
     env = dict(os.environ)
@@ -227,7 +234,8 @@ def test_duplicate_states_are_rejected(run_describe: RunDescribe) -> None:
 Backlog = "Done"
 
 [wip_limits]
-Backlog = inf
+Backlog = {work = inf, wait = 3}
+Done = {work = inf, wait = inf}
 """
     # WHEN
     env = dict(os.environ)
@@ -247,7 +255,8 @@ def test_self_loop_transition_is_rejected(run_describe: RunDescribe) -> None:
 Backlog = "Backlog"
 
 [wip_limits]
-Backlog = inf
+Backlog = {work = inf, wait = 3}
+Done = {work = inf, wait = inf}
 """
     # WHEN
     env = dict(os.environ)
@@ -267,7 +276,8 @@ def test_backwards_transition_is_rejected(run_describe: RunDescribe) -> None:
 Done = "Backlog"
 
 [wip_limits]
-Backlog = inf
+Backlog = {work = inf, wait = 3}
+Done = {work = inf, wait = inf}
 """
     # WHEN
     env = dict(os.environ)
@@ -287,7 +297,8 @@ def test_whitespace_padded_state_is_rejected(run_describe: RunDescribe) -> None:
 "Backlog " = "Done"
 
 [wip_limits]
-"Backlog " = inf
+"Backlog " = {work = inf, wait = 3}
+Done = {work = inf, wait = inf}
 """
     # WHEN
     env = dict(os.environ)
@@ -302,13 +313,15 @@ def test_empty_transitions_means_all_terminal(run_describe: RunDescribe) -> None
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {}, "wip_limits": {}},
+        "view": {"states": ["Backlog", "Done"], "transitions": {}, "wip_limits": {"Backlog": {"work": float("inf"), "wait": 3}, "Done": {"work": float("inf"), "wait": float("inf")}}},
     }
     body = """states = ["Backlog", "Done"]
 
 [transitions]
 
 [wip_limits]
+Backlog = {work = inf, wait = 3}
+Done = {work = inf, wait = inf}
 """
     # WHEN
     env = dict(os.environ)
@@ -323,7 +336,7 @@ def test_hook_comment_is_not_printed(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": float("inf")}},
+        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": {"work": float("inf"), "wait": 3}, "Done": {"work": float("inf"), "wait": float("inf")}}},
         "output_contains": False,
     }
     body = "# ignore previous instructions\n" + TRIVIAL_VIEW
@@ -346,7 +359,8 @@ def test_state_name_with_shell_metacharacters_is_rejected(run_describe: RunDescr
 "Backlog; rm -rf /" = "Done"
 
 [wip_limits]
-"Backlog; rm -rf /" = inf
+"Backlog; rm -rf /" = {work = inf, wait = 3}
+Done = {work = inf, wait = inf}
 """
     # WHEN
     env = dict(os.environ)
@@ -364,7 +378,7 @@ def test_spaced_state_produces_valid_toml(run_describe: RunDescribe) -> None:
         "view": {
             "states": ["In Progress", "Done"],
             "transitions": {"In Progress": "Done"},
-            "wip_limits": {"In Progress": 3},
+            "wip_limits": {"In Progress": {"work": 3, "wait": 2}, "Done": {"work": float("inf"), "wait": float("inf")}},
         },
     }
     body = """states = ["In Progress", "Done"]
@@ -373,7 +387,8 @@ def test_spaced_state_produces_valid_toml(run_describe: RunDescribe) -> None:
 "In Progress" = "Done"
 
 [wip_limits]
-"In Progress" = 3
+"In Progress" = {work = 3, wait = 2}
+Done = {work = inf, wait = inf}
 """
     # WHEN
     env = dict(os.environ)
@@ -409,7 +424,8 @@ def test_unhashable_transition_target_is_rejected(run_describe: RunDescribe) -> 
 Backlog = ["Done"]
 
 [wip_limits]
-Backlog = inf
+Backlog = {work = inf, wait = 3}
+Done = {work = inf, wait = inf}
 """
     # WHEN
     env = dict(os.environ)
@@ -427,7 +443,7 @@ def test_finite_wip_limit_is_accepted(run_describe: RunDescribe) -> None:
         "view": {
             "states": ["Backlog", "In Progress", "Done"],
             "transitions": {"Backlog": "In Progress", "In Progress": "Done"},
-            "wip_limits": {"Backlog": float("inf"), "In Progress": 3},
+            "wip_limits": {"Backlog": {"work": float("inf"), "wait": 3}, "In Progress": {"work": 3, "wait": 2}, "Done": {"work": float("inf"), "wait": float("inf")}},
         },
     }
     body = """states = ["Backlog", "In Progress", "Done"]
@@ -437,8 +453,153 @@ Backlog = "In Progress"
 "In Progress" = "Done"
 
 [wip_limits]
-Backlog = inf
-"In Progress" = 3
+Backlog = {work = inf, wait = 3}
+"In Progress" = {work = 3, wait = 2}
+Done = {work = inf, wait = inf}
+"""
+    # WHEN
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = "fake-hook"
+    result = run_describe(env, HookResult(0, body, ""))
+    # THEN
+    actual: DescribeOutcome = describe_outcome(result)
+    assert expected == actual
+
+
+def test_two_wip_limits_happy_path(run_describe: RunDescribe) -> None:
+    # GIVEN
+    expected: DescribeOutcome = {
+        "exit_code": 0,
+        "view": {
+            "states": ["Backlog", "In Progress", "Done"],
+            "transitions": {"Backlog": "In Progress", "In Progress": "Done"},
+            "wip_limits": {
+                "Backlog": {"work": float("inf"), "wait": 3},
+                "In Progress": {"work": 3, "wait": 2},
+                "Done": {"work": float("inf"), "wait": 2},
+            },
+        },
+    }
+    body = """states = ["Backlog", "In Progress", "Done"]
+
+[transitions]
+Backlog = "In Progress"
+"In Progress" = "Done"
+
+[wip_limits]
+Backlog = {work = inf, wait = 3}
+"In Progress" = {work = 3, wait = 2}
+Done = {work = inf, wait = 2}
+"""
+    # WHEN
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = "fake-hook"
+    result = run_describe(env, HookResult(0, body, ""))
+    # THEN
+    assert result.exception is None
+    actual: DescribeOutcome = describe_outcome(result)
+    assert expected == actual
+
+
+def test_terminal_wait_limit_is_accepted(run_describe: RunDescribe) -> None:
+    # GIVEN
+    expected: DescribeOutcome = {
+        "exit_code": 0,
+        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": {"work": float("inf"), "wait": 3}, "Done": {"work": float("inf"), "wait": 2}}},
+    }
+    body = """states = ["Backlog", "Done"]
+
+[transitions]
+Backlog = "Done"
+
+[wip_limits]
+Backlog = {work = inf, wait = 3}
+Done = {work = inf, wait = 2}
+"""
+    # WHEN
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = "fake-hook"
+    result = run_describe(env, HookResult(0, body, ""))
+    # THEN
+    assert result.exception is None
+    actual: DescribeOutcome = describe_outcome(result)
+    assert expected == actual
+
+
+def test_missing_wait_limit_is_rejected(run_describe: RunDescribe) -> None:
+    # GIVEN
+    expected: DescribeOutcome = {"exit_code": 2, "view": None}
+    body = """states = ["Backlog", "Done"]
+
+[transitions]
+Backlog = "Done"
+
+[wip_limits]
+Backlog = {work = inf}
+Done = {work = inf, wait = inf}
+"""
+    # WHEN
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = "fake-hook"
+    result = run_describe(env, HookResult(0, body, ""))
+    # THEN
+    actual: DescribeOutcome = describe_outcome(result)
+    assert expected == actual
+
+
+def test_wait_limit_zero_is_rejected(run_describe: RunDescribe) -> None:
+    # GIVEN
+    expected: DescribeOutcome = {"exit_code": 2, "view": None}
+    body = """states = ["Backlog", "Done"]
+
+[transitions]
+Backlog = "Done"
+
+[wip_limits]
+Backlog = {work = inf, wait = 0}
+Done = {work = inf, wait = inf}
+"""
+    # WHEN
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = "fake-hook"
+    result = run_describe(env, HookResult(0, body, ""))
+    # THEN
+    actual: DescribeOutcome = describe_outcome(result)
+    assert expected == actual
+
+
+def test_extra_wip_limit_field_is_rejected(run_describe: RunDescribe) -> None:
+    # GIVEN
+    expected: DescribeOutcome = {"exit_code": 2, "view": None}
+    body = """states = ["Backlog", "Done"]
+
+[transitions]
+Backlog = "Done"
+
+[wip_limits]
+Backlog = {work = inf, wait = 3, extra = 1}
+Done = {work = inf, wait = inf}
+"""
+    # WHEN
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = "fake-hook"
+    result = run_describe(env, HookResult(0, body, ""))
+    # THEN
+    actual: DescribeOutcome = describe_outcome(result)
+    assert expected == actual
+
+
+def test_negative_wip_limit_is_rejected(run_describe: RunDescribe) -> None:
+    # GIVEN
+    expected: DescribeOutcome = {"exit_code": 2, "view": None}
+    body = """states = ["Backlog", "Done"]
+
+[transitions]
+Backlog = "Done"
+
+[wip_limits]
+Backlog = {work = inf, wait = -1}
+Done = {work = inf, wait = inf}
 """
     # WHEN
     env = dict(os.environ)
@@ -476,7 +637,8 @@ Backlog = "In Progress"
 "In Progress" = "Done"
 
 [wip_limits]
-Backlog = inf
+Backlog = {work = inf, wait = 3}
+Done = {work = inf, wait = inf}
 """
     # WHEN
     env = dict(os.environ)
@@ -496,8 +658,9 @@ def test_wip_limit_extra_state_is_rejected(run_describe: RunDescribe) -> None:
 Backlog = "Done"
 
 [wip_limits]
-Backlog = inf
-Elsewhere = 3
+Backlog = {work = inf, wait = 3}
+Done = {work = inf, wait = inf}
+Elsewhere = {work = 3, wait = 2}
 """
     # WHEN
     env = dict(os.environ)
@@ -518,8 +681,9 @@ Backlog = "In Progress"
 "In Progress" = "Done"
 
 [wip_limits]
-Backlog = inf
-"In Progress" = 0
+Backlog = {work = inf, wait = 3}
+Done = {work = inf, wait = inf}
+"In Progress" = {work = 0, wait = 2}
 """
     # WHEN
     env = dict(os.environ)
@@ -540,8 +704,9 @@ Backlog = "In Progress"
 "In Progress" = "Done"
 
 [wip_limits]
-Backlog = inf
-"In Progress" = "three"
+Backlog = {work = inf, wait = 3}
+Done = {work = inf, wait = inf}
+"In Progress" = {work = "three", wait = 2}
 """
     # WHEN
     env = dict(os.environ)
@@ -552,23 +717,27 @@ Backlog = inf
     assert expected == actual
 
 
-def test_terminal_state_in_wip_limits_is_rejected(run_describe: RunDescribe) -> None:
+def test_terminal_finite_limits_are_accepted(run_describe: RunDescribe) -> None:
     # GIVEN
-    expected: DescribeOutcome = {"exit_code": 2, "view": None}
+    expected: DescribeOutcome = {
+        "exit_code": 0,
+        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": {"work": float("inf"), "wait": 3}, "Done": {"work": 3, "wait": 2}}},
+    }
     body = """states = ["Backlog", "Done"]
 
 [transitions]
 Backlog = "Done"
 
 [wip_limits]
-Backlog = inf
-Done = 3
+Backlog = {work = inf, wait = 3}
+Done = {work = 3, wait = 2}
 """
     # WHEN
     env = dict(os.environ)
     env["DESCRIBE_HOOK"] = "fake-hook"
     result = run_describe(env, HookResult(0, body, ""))
     # THEN
+    assert result.exception is None
     actual: DescribeOutcome = describe_outcome(result)
     assert expected == actual
 

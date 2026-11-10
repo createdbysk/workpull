@@ -44,7 +44,8 @@ filesystem.
 
 - Happy path: mock hook prints Backlog/Done, CLI exit 0, output
   parses as TOML with states Backlog and Done, transition Backlog -> Done,
-  and wip_limits Backlog unlimited, Done not listed.
+  and wip_limits Backlog work unlimited with wait 3, Done work
+  and wait unlimited.
 - Missing hook: non-zero, no invented output.
 - Injected run hook: a fake `run_hook` supplied in `ctx.obj`
   is used instead of the real one, CLI exit 0 with the
@@ -81,5 +82,6 @@ states = ["Backlog", "Done"]
 "Backlog" = "Done"
 
 [wip_limits]
-Backlog = inf
+"Backlog" = {work = inf, wait = 3}
+"Done" = {work = inf, wait = inf}
 ```

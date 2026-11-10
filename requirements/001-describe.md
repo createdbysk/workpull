@@ -18,10 +18,14 @@ Describe is therefore the first command, before ready and claim.
   which state a transition moves an item from, and which
   state it moves it to. Claim does not move an item; see
   requirement 005.
-- The WIP limit of each non-terminal state, as defined by
-  the backend. A finite limit is a positive integer.
-  Unlimited is `inf`. Terminal states are not listed in
-  wip_limits; they are unlimited by definition.
+- The WIP limits of each state, as defined by the backend.
+  Every state has two WIP limits: one for tickets in
+  the state itself, and one for tickets in that state's
+  wait state. A finite limit is a positive integer.
+  Unlimited is `inf`. There are no constraints on the
+  values: the backend decides what the work and wait
+  limits are, for every state, including a terminal
+  state and the first state.
 - A state with no outgoing transition is terminal in this
   system.
 

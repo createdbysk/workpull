@@ -21,23 +21,46 @@
   the backend, not written in advance.
 - It contains `states`, a list of state names, a `[transitions]`
   table, mapping a current state to the state a transition moves it to,
-  and a `[wip_limits]` table, mapping each non-terminal state
-  to its WIP limit. A finite limit is a positive integer.
-  Unlimited is `inf`. Terminal states are not listed in
-  wip_limits; they are unlimited by definition, so a transition
-  into Done is never blocked by capacity.
+  and a `[wip_limits]` table, mapping each state to its WIP
+  limits, as an inline table with named fields. Every state
+  has two limits: `work`, for tickets in the state
+  itself, and `wait`, for tickets in that state's wait state.
+  A finite limit is a positive integer. Unlimited is `inf`.
+  There are no constraints on the values: the backend
+  decides what the work and wait limits are, for every
+  state, including a terminal state and the first state.
+  If a state's work limit is `inf`, the system moves
+  work from its wait state automatically, and a finite
+  wait limit can still block that state.
 - For the trivial system:
   - states: Backlog, Done
   - transition: Backlog -> Done
+  - wip_limits: Backlog has work `inf` and wait `3`,
+    Done has work `inf` and wait `inf`
+
+Two shapes were considered and rejected, for the record.
+A second table, `[wait_wip_limits]`, splits one state's
+two limits across two tables. An array, such as
+`Backlog = [inf, 3]`, hides intent in positions, so a
+reader needs documentation to know which value is the
+work limit and which is the wait limit. Named fields
+`work` and `wait` carry that meaning in their names.
 
 ## Validation
 
 Before a generic view is returned, it is validated:
 
 - It must contain exactly states, transitions, and wip_limits.
-- wip_limits must contain exactly one entry per non-terminal
-  state, and no entry for a terminal state. Each value must
-  be a positive integer, or `inf` for unlimited.
+- wip_limits must contain exactly one entry per state.
+  Each entry is an inline table with exactly `work` and
+  `wait`, each a positive integer, or `inf` for
+  unlimited. A state missing from wip_limits, a state
+  in wip_limits that is not in states, a missing field,
+  an extra field, a zero, negative, string, or other
+  non-integer non-`inf` value is rejected. There is no
+  other constraint on the values: a terminal state may
+  have a finite work limit and a finite wait limit, and
+  a state with infinite work may have a finite wait.
 - States must be a non-empty list of unique, valid state names.
 - A valid state name contains only letters, digits, space, hyphen,
   or underscore, with no leading or trailing whitespace, and not
