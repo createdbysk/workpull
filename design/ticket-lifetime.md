@@ -161,7 +161,7 @@ in work. There is no signal change.
 
 The claiming actor releases the claim in the same column.
 Someone else can claim it again. The command is
-`release <ticket>`, ticket id only, no state.
+`release <ticket> <token>`, ticket id and token, no state.
 
 - State: Backlog, example, unchanged
 - Claim: Released, no actor holds it. The ticket is now
@@ -174,8 +174,8 @@ Someone else can claim it again. The command is
 When work in a state is finished, the ticket moves into
 the wait state for the next state. The claiming actor
 moves it. Claim ends on the move. The command is
-`transition <ticket> <to-state>`, ticket id and to-state,
-no from-state.
+`transition <ticket> <to-state> <token>`, ticket id,
+to-state, and token, no from-state.
 
 - State: Wait state for the next state, example, changed
   from Backlog

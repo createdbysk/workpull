@@ -17,25 +17,45 @@
   and the backend validates it.
 - Hook commands come only from environment set by the operator,
   never from backend output, a ticket, or a backend-controlled file.
-- Actor identity is the hook's own operator context. Workpull
-  does not invent an actor id. The backend hook knows its actor
-  from its operator environment and backend credentials, and
-  enforces the mutex on that basis.
+- Claim is a backend lock, distributed. Actors run on
+  different hosts, so Workpull stores no claim. The backend
+  issues a token when a ticket is claimed, and stores it
+  with the claim. The backend decides all security
+  guarantees for the token: format, length, expiry,
+  storage. Workpull never validates the token, never
+  generates it, and just presents it, unchanged, to the
+  backend hook that needs it. See design 015.
 
 ## Claim ticket result
 
 - The hook picks the ticket. The caller gives the state,
-  not the ticket. The hook returns the ticket it claimed,
-  as a single ticket id on stdout.
+  not the ticket. The hook returns the ticket it claimed
+  and the token it issued, as TOML on stdout:
+
+  ```toml
+  ticket = "ticket-1"
+  token = "token-1"
+  ```
+
 - Hook exit 0 means the mutex is acquired. The CLI exits 0
-  and prints the ticket id returned by the hook, and nothing
-  else.
+  and prints the hook output, the two TOML lines, and
+  nothing else.
+- The CLI prints the hook output verbatim, as the hook
+  wrote it. A reversed order, or a TOML comment in the
+  hook output, is printed as-is. Workpull does not
+  re-render the ticket and token, because the token is
+  opaque backend material and Workpull presents it
+  unchanged.
 - Hook exit non-zero means no ticket is claimed. The CLI
-  preserves that exit code, and prints no ticket id.
+  preserves that exit code, and prints nothing.
 - A missing claim ticket hook means no claim. The CLI exits 2,
   and no claim is invented.
+- Hook exit 0 with output that is not valid TOML, or not
+  exactly a ticket and a token, each a non-empty string,
+  means no ticket is claimed. The CLI exits 2, and prints
+  nothing.
 - The CLI does not validate a state. It only
-  forwards the hook's ticket id on success, and its exit
+  forwards the hook's output on success, and its exit
   code on failure.
 - Claim ticket itself does not move a ticket, does not change
   its state. It only acquires

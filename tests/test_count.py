@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import TypedDict
+from typing import NamedTuple, TypedDict
 
 import contextlib
 
@@ -39,6 +39,11 @@ def write_mock_hook(state: str, hook_command: HookCommand) -> str:
         "sys.stdout.write('wait = 2\\nwork = 3\\n')\n"
     )
     return hook_command("mock_count.py")
+
+
+class CountInvalidCase(NamedTuple):
+    case_name: str
+    hook_stdout: str
 
 
 def count_outcome(result: Result) -> CountOutcome:
@@ -114,6 +119,54 @@ def test_count_invalid_toml(run_count: RunCount) -> None:
     env = dict(os.environ)
     env["COUNT_HOOK"] = "fake-hook"
     result = run_count("In Progress", env, HookResult(0, "wait = \n", ""))
+    # THEN
+    actual: CountOutcome = count_outcome(result)
+    assert expected == actual
+
+
+def _invalid_case_id(case: CountInvalidCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        CountInvalidCase(
+            case_name="missing_work",
+            hook_stdout="wait = 2\n",
+        ),
+        CountInvalidCase(
+            case_name="missing_wait",
+            hook_stdout="work = 3\n",
+        ),
+        CountInvalidCase(
+            case_name="extra_field",
+            hook_stdout="wait = 2\nwork = 3\nextra = 1\n",
+        ),
+        CountInvalidCase(
+            case_name="wait_string",
+            hook_stdout='wait = "2"\nwork = 3\n',
+        ),
+        CountInvalidCase(
+            case_name="wait_negative",
+            hook_stdout="wait = -1\nwork = 3\n",
+        ),
+        CountInvalidCase(
+            case_name="wait_bool",
+            hook_stdout="wait = true\nwork = 3\n",
+        ),
+    ],
+    ids=_invalid_case_id,
+)
+def test_count_invalid_output(
+    run_count: RunCount, case: CountInvalidCase
+) -> None:
+    # GIVEN
+    expected: CountOutcome = {"exit_code": 2, "output": None}
+    # WHEN
+    env = dict(os.environ)
+    env["COUNT_HOOK"] = "fake-hook"
+    result = run_count("In Progress", env, HookResult(0, case.hook_stdout, ""))
     # THEN
     actual: CountOutcome = count_outcome(result)
     assert expected == actual

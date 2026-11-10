@@ -46,6 +46,11 @@
   the hook output, the two TOML lines, and nothing else.
 - Hook exit 0 with output that is not valid TOML means
   not counted. The CLI exits 2, and prints no output.
+- Hook exit 0 with output that is not exactly `wait`
+  and `work`, each a non-negative integer, means not
+  counted. The CLI exits 2, and prints no output. This
+  is the same shape the can-transition helper checks,
+  through the shared validator.
 - The CLI does not validate a state. The backend
   validates it.
 

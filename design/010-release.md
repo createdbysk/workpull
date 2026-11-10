@@ -2,9 +2,11 @@
 
 ## Command
 
-- `release <ticket>`
-- Ticket id only, no state. Release ends the claim on a
-  ticket, in the same column, in the same state.
+- `release <ticket> <token>`
+- Ticket id and token, no state. Release ends the claim on a
+  ticket, in the same column, in the same state. The token
+  is the one the backend issued when the ticket was claimed.
+  See design 015.
 
 ## Hook interface
 
@@ -20,13 +22,15 @@
 - The CLI runs that command with no shell.
 - Context is passed to a hook only through environment
   variables, never by interpolating values into the
-  command string: `WORKPULL_TICKET` only.
+  command string: `WORKPULL_TICKET` and `WORKPULL_TOKEN`.
 - Hook commands come only from environment set by the
   operator, never from backend output, a ticket, or a
   backend-controlled file.
-- The backend hook owns the claim store. It ends the
-  claim on the ticket. The CLI does not know the claim
-  store, and does not end the claim itself.
+- The backend hook owns the claim store. It validates the
+  token against the claim on the ticket, and ends the
+  claim only if it matches. The CLI does not know the
+  claim store, does not validate the token, and does not
+  end the claim itself.
 
 ## Release result
 
@@ -34,8 +38,8 @@
   the ticket id, and nothing else, for the Unix pipeline.
 - Hook exit non-zero means not released. The CLI preserves
   that exit code, and prints no ticket id. That covers a
-  ticket with no claim to release, and a race, as a hook
-  failure.
+  wrong token, a ticket with no claim to release, and a
+  race, as a hook failure.
 - Hook exit 0 with empty stdout means not released. Exit
   0 means released with one ticket id, so a hook that
   exits 0 and prints nothing breaks that contract. The

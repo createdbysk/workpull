@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import TypedDict
+from typing import NamedTuple, TypedDict
 
 import contextlib
 
@@ -18,9 +18,9 @@ HookCommand = Callable[[str], str]
 NormalizeHelp = Callable[[str], str]
 
 
-class TicketOutcome(TypedDict, total=False):
+class ClaimOutcome(TypedDict, total=False):
     exit_code: int
-    ticket_id: str | None
+    output: str | None
 
 
 class HelpOutcome(TypedDict, total=False):
@@ -28,7 +28,12 @@ class HelpOutcome(TypedDict, total=False):
     help_text: str
 
 
-def write_mock_hook(ticket_id: str, hook_command: HookCommand) -> str:
+class ClaimInvalidCase(NamedTuple):
+    case_name: str
+    hook_stdout: str
+
+
+def write_mock_hook(ticket_id: str, token: str, hook_command: HookCommand) -> str:
     hook = Path("mock_claim_ticket.py")
     hook.write_text(
         "import os, sys\n"
@@ -36,17 +41,17 @@ def write_mock_hook(ticket_id: str, hook_command: HookCommand) -> str:
         "    sys.exit(1)\n"
         "if {key for key in os.environ if key.startswith('WORKPULL_')} != {'WORKPULL_STATE'}:\n"
         "    sys.exit(1)\n"
-        f"sys.stdout.write('{ticket_id}\\n')\n"
+        f"sys.stdout.write('ticket = \"{ticket_id}\"\\ntoken = \"{token}\"\\n')\n"
     )
     return hook_command("mock_claim_ticket.py")
 
 
-def claim_ticket_outcome(result: Result) -> TicketOutcome:
-    outcome: TicketOutcome = {"exit_code": result.exit_code}
+def claim_ticket_outcome(result: Result) -> ClaimOutcome:
+    outcome: ClaimOutcome = {"exit_code": result.exit_code}
     if result.exit_code == 0:
-        outcome["ticket_id"] = result.output.strip()
+        outcome["output"] = result.output.strip()
     else:
-        outcome["ticket_id"] = None
+        outcome["output"] = None
     return outcome
 
 
@@ -73,65 +78,143 @@ def run_claim_ticket(runner: CliRunner) -> RunClaimTicket:
 @pytest.mark.parametrize("ticket_id", ["ticket-1", "0"])
 def test_claim_ticket_happy_path(run_claim_ticket: RunClaimTicket, ticket_id: str) -> None:
     # GIVEN
-    expected: TicketOutcome = {"exit_code": 0, "ticket_id": ticket_id}
+    expected: ClaimOutcome = {
+        "exit_code": 0,
+        "output": f'ticket = "{ticket_id}"\ntoken = "token-1"',
+    }
     # WHEN
     env = dict(os.environ)
     env["CLAIM_TICKET_HOOK"] = "fake-hook"
-    result = run_claim_ticket("Develop", env, HookResult(0, f"{ticket_id}\n", ""))
+    result = run_claim_ticket(
+        "Develop",
+        env,
+        HookResult(0, f'ticket = "{ticket_id}"\ntoken = "token-1"\n', ""),
+    )
     # THEN
     assert result.exception is None
-    actual: TicketOutcome = claim_ticket_outcome(result)
+    actual: ClaimOutcome = claim_ticket_outcome(result)
+    assert expected == actual
+
+
+def test_claim_ticket_reversed_output_is_forwarded_verbatim(
+    run_claim_ticket: RunClaimTicket,
+) -> None:
+    # GIVEN
+    expected: ClaimOutcome = {
+        "exit_code": 0,
+        "output": '# claimed\ntoken = "token-1"\nticket = "ticket-1"',
+    }
+    # WHEN
+    env = dict(os.environ)
+    env["CLAIM_TICKET_HOOK"] = "fake-hook"
+    result = run_claim_ticket(
+        "Develop",
+        env,
+        HookResult(
+            0,
+            '# claimed\ntoken = "token-1"\nticket = "ticket-1"\n',
+            "",
+        ),
+    )
+    # THEN
+    assert result.exception is None
+    actual: ClaimOutcome = claim_ticket_outcome(result)
     assert expected == actual
 
 
 def test_claim_ticket_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
     # GIVEN
-    expected: TicketOutcome = {"exit_code": 0, "ticket_id": "ticket-1"}
+    expected: ClaimOutcome = {
+        "exit_code": 0,
+        "output": 'ticket = "ticket-1"\ntoken = "token-1"',
+    }
     # WHEN
     with isolated_filesystem():
-        hook = write_mock_hook("ticket-1", hook_command)
+        hook = write_mock_hook("ticket-1", "token-1", hook_command)
         env = dict(os.environ)
         env["CLAIM_TICKET_HOOK"] = hook
         result = runner.invoke(cli, ["claim-ticket", "Develop"], env=env, obj={})
     # THEN
     assert result.exception is None
-    actual: TicketOutcome = claim_ticket_outcome(result)
+    actual: ClaimOutcome = claim_ticket_outcome(result)
     assert expected == actual
 
 
 def test_claim_ticket_missing_hook(run_claim_ticket: RunClaimTicket) -> None:
     # GIVEN
-    expected: TicketOutcome = {"exit_code": 2, "ticket_id": None}
+    expected: ClaimOutcome = {"exit_code": 2, "output": None}
     # WHEN
     env = dict(os.environ)
     env.pop("CLAIM_TICKET_HOOK", None)
-    result = run_claim_ticket("Develop", env, HookResult(0, "ticket-1\n", ""))
+    result = run_claim_ticket(
+        "Develop", env, HookResult(0, 'ticket = "ticket-1"\ntoken = "token-1"\n', "")
+    )
     # THEN
-    actual: TicketOutcome = claim_ticket_outcome(result)
+    actual: ClaimOutcome = claim_ticket_outcome(result)
     assert expected == actual
 
 
 def test_claim_ticket_failing_hook(run_claim_ticket: RunClaimTicket) -> None:
     # GIVEN
-    expected: TicketOutcome = {"exit_code": 3, "ticket_id": None}
+    expected: ClaimOutcome = {"exit_code": 3, "output": None}
     # WHEN
     env = dict(os.environ)
     env["CLAIM_TICKET_HOOK"] = "fake-hook"
     result = run_claim_ticket("Develop", env, HookResult(3, "", ""))
     # THEN
-    actual: TicketOutcome = claim_ticket_outcome(result)
+    actual: ClaimOutcome = claim_ticket_outcome(result)
     assert expected == actual
 
 
-def test_claim_ticket_empty_ticket_id(run_claim_ticket: RunClaimTicket) -> None:
+def _invalid_case_id(case: ClaimInvalidCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        ClaimInvalidCase(
+            case_name="empty_ticket",
+            hook_stdout='ticket = ""\ntoken = "token-1"\n',
+        ),
+        ClaimInvalidCase(
+            case_name="empty_token",
+            hook_stdout='ticket = "ticket-1"\ntoken = ""\n',
+        ),
+        ClaimInvalidCase(
+            case_name="invalid_toml",
+            hook_stdout="ticket = \n",
+        ),
+        ClaimInvalidCase(
+            case_name="missing_token",
+            hook_stdout='ticket = "ticket-1"\n',
+        ),
+        ClaimInvalidCase(
+            case_name="extra_field",
+            hook_stdout='ticket = "ticket-1"\ntoken = "token-1"\nextra = 1\n',
+        ),
+        ClaimInvalidCase(
+            case_name="non_string_ticket",
+            hook_stdout='ticket = 1\ntoken = "token-1"\n',
+        ),
+        ClaimInvalidCase(
+            case_name="non_string_token",
+            hook_stdout='ticket = "ticket-1"\ntoken = 1\n',
+        ),
+    ],
+    ids=_invalid_case_id,
+)
+def test_claim_ticket_invalid_output(
+    run_claim_ticket: RunClaimTicket, case: ClaimInvalidCase
+) -> None:
     # GIVEN
-    expected: TicketOutcome = {"exit_code": 2, "ticket_id": None}
+    expected: ClaimOutcome = {"exit_code": 2, "output": None}
     # WHEN
     env = dict(os.environ)
     env["CLAIM_TICKET_HOOK"] = "fake-hook"
-    result = run_claim_ticket("Develop", env, HookResult(0, "", ""))
+    result = run_claim_ticket("Develop", env, HookResult(0, case.hook_stdout, ""))
     # THEN
-    actual: TicketOutcome = claim_ticket_outcome(result)
+    actual: ClaimOutcome = claim_ticket_outcome(result)
     assert expected == actual
 
 

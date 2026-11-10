@@ -178,11 +178,24 @@ def claim_ticket(state: str, run_hook_fn: RunHook) -> None:
     result = run_hook_fn(hook, {"WORKPULL_STATE": state})
     if result.returncode != 0:
         raise click.exceptions.Exit(result.returncode)
-    ticket_id = result.stdout.strip()
-    if not ticket_id:
-        click.echo("claim-ticket hook returned no ticket id", err=True)
+    try:
+        claim = tomllib.loads(result.stdout)
+    except tomllib.TOMLDecodeError as exc:
+        click.echo(f"claim-ticket hook output is not valid TOML: {exc}", err=True)
         raise click.exceptions.Exit(2)
-    click.echo(ticket_id)
+    if (
+        not isinstance(claim, dict)
+        or set(claim) != {"ticket", "token"}
+        or not isinstance(claim["ticket"], str)
+        or not claim["ticket"]
+        or not isinstance(claim["token"], str)
+        or not claim["token"]
+    ):
+        click.echo(
+            "invalid claim-ticket output: expected ticket and token", err=True
+        )
+        raise click.exceptions.Exit(2)
+    click.echo(result.stdout.strip())
 
 
 def describe(run_hook_fn: RunHook) -> None:
@@ -260,13 +273,13 @@ def prioritize(ticket: str, after: str, run_hook_fn: RunHook) -> None:
     click.echo(ticket_id)
 
 
-def release(ticket: str, run_hook_fn: RunHook) -> None:
+def release(ticket: str, token: str, run_hook_fn: RunHook) -> None:
     """Release a ticket's claim."""
     hook = os.environ.get("RELEASE_HOOK")
     if not hook:
         click.echo("RELEASE_HOOK is not set", err=True)
         raise click.exceptions.Exit(2)
-    result = run_hook_fn(hook, {"WORKPULL_TICKET": ticket})
+    result = run_hook_fn(hook, {"WORKPULL_TICKET": ticket, "WORKPULL_TOKEN": token})
     if result.returncode != 0:
         raise click.exceptions.Exit(result.returncode)
     ticket_id = result.stdout.strip()
@@ -274,6 +287,24 @@ def release(ticket: str, run_hook_fn: RunHook) -> None:
         click.echo("release hook returned no ticket id", err=True)
         raise click.exceptions.Exit(2)
     click.echo(ticket_id)
+
+
+def validate_count(counts: object) -> str | None:
+    """Validate a parsed count document. Returns an error string or None.
+
+    Contract, for hook authors: exactly wait and work,
+    each a non-negative integer.
+    """
+    if (
+        not isinstance(counts, dict)
+        or set(counts) != {"wait", "work"}
+        or any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in counts.values()
+        )
+    ):
+        return "invalid count output: expected wait and work counts"
+    return None
 
 
 def count(state: str, run_hook_fn: RunHook) -> None:
@@ -286,9 +317,13 @@ def count(state: str, run_hook_fn: RunHook) -> None:
     if result.returncode != 0:
         raise click.exceptions.Exit(result.returncode)
     try:
-        tomllib.loads(result.stdout)
+        counts = tomllib.loads(result.stdout)
     except tomllib.TOMLDecodeError as exc:
         click.echo(f"count hook output is not valid TOML: {exc}", err=True)
+        raise click.exceptions.Exit(2)
+    error = validate_count(counts)
+    if error:
+        click.echo(error, err=True)
         raise click.exceptions.Exit(2)
     click.echo(result.stdout.strip())
 
@@ -357,39 +392,48 @@ def _fetch_wait_count(to_state: str, run_hook_fn: RunHook) -> int:
     except tomllib.TOMLDecodeError as exc:
         click.echo(f"count hook output is not valid TOML: {exc}", err=True)
         raise click.exceptions.Exit(2)
-    if (
-        not isinstance(counts, dict)
-        or set(counts) != {"wait", "work"}
-        or any(
-            isinstance(value, bool) or not isinstance(value, int) or value < 0
-            for value in counts.values()
-        )
-    ):
-        click.echo("invalid count output: expected wait and work counts", err=True)
+    error = validate_count(counts)
+    if error:
+        click.echo(error, err=True)
         raise click.exceptions.Exit(2)
     return counts["wait"]
 
 
-def can_transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> None:
-    """Check whether a ticket can move to a state."""
+def _can_transition_decision(ticket: str, to_state: str, run_hook_fn: RunHook) -> bool:
     current_state = _fetch_current_state(ticket, run_hook_fn)
     view = _fetch_describe_view(run_hook_fn)
     if to_state not in view["wip_limits"]:
-        click.echo("false")
-        return
+        return False
     wait_count = _fetch_wait_count(to_state, run_hook_fn)
     reachable = view["transitions"].get(current_state) == to_state
     wait_limit = view["wip_limits"][to_state]["wait"]
-    click.echo("true" if reachable and wait_count < wait_limit else "false")
+    return reachable and wait_count < wait_limit
 
 
-def transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> None:
+def can_transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> None:
+    """Check whether a ticket can move to a state."""
+    click.echo(
+        "true" if _can_transition_decision(ticket, to_state, run_hook_fn) else "false"
+    )
+
+
+def transition(ticket: str, to_state: str, token: str, run_hook_fn: RunHook) -> None:
     """Move a ticket to a wait state."""
+    if not _can_transition_decision(ticket, to_state, run_hook_fn):
+        click.echo("transition is not allowed", err=True)
+        raise click.exceptions.Exit(2)
     hook = os.environ.get("TRANSITION_HOOK")
     if not hook:
         click.echo("TRANSITION_HOOK is not set", err=True)
         raise click.exceptions.Exit(2)
-    result = run_hook_fn(hook, {"WORKPULL_TICKET": ticket, "WORKPULL_TO_STATE": to_state})
+    result = run_hook_fn(
+        hook,
+        {
+            "WORKPULL_TICKET": ticket,
+            "WORKPULL_TO_STATE": to_state,
+            "WORKPULL_TOKEN": token,
+        },
+    )
     if result.returncode != 0:
         raise click.exceptions.Exit(result.returncode)
     ticket_id = result.stdout.strip()
@@ -426,10 +470,11 @@ def prioritize_command(ctx: click.Context, ticket: str, after: str) -> None:
 
 @cli.command(name="release")
 @click.argument("ticket")
+@click.argument("token")
 @click.pass_context
-def release_command(ctx: click.Context, ticket: str) -> None:
+def release_command(ctx: click.Context, ticket: str, token: str) -> None:
     """Release a ticket's claim."""
-    release(ticket, ctx.obj["run_hook"])
+    release(ticket, token, ctx.obj["run_hook"])
 
 
 @cli.command(name="count")
@@ -460,10 +505,11 @@ def can_transition_command(ctx: click.Context, ticket: str, to_state: str) -> No
 @cli.command(name="transition")
 @click.argument("ticket")
 @click.argument("to_state")
+@click.argument("token")
 @click.pass_context
-def transition_command(ctx: click.Context, ticket: str, to_state: str) -> None:
+def transition_command(ctx: click.Context, ticket: str, to_state: str, token: str) -> None:
     """Move a ticket to a wait state."""
-    transition(ticket, to_state, ctx.obj["run_hook"])
+    transition(ticket, to_state, token, ctx.obj["run_hook"])
 
 
 @cli.command(name="describe")

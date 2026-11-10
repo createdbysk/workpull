@@ -12,7 +12,7 @@ from collections.abc import Callable
 
 from workpull.cli import HookResult, cli
 
-RunRelease = Callable[[str, dict[str, str], HookResult], Result]
+RunRelease = Callable[[str, str, dict[str, str], HookResult], Result]
 IsolatedFilesystem = Callable[[], contextlib.AbstractContextManager[str]]
 HookCommand = Callable[[str], str]
 NormalizeHelp = Callable[[str], str]
@@ -28,13 +28,15 @@ class HelpOutcome(TypedDict, total=False):
     help_text: str
 
 
-def write_mock_hook(ticket_id: str, hook_command: HookCommand) -> str:
+def write_mock_hook(ticket_id: str, token: str, hook_command: HookCommand) -> str:
     hook = Path("mock_release.py")
     hook.write_text(
         "import os, sys\n"
         "if os.environ.get('WORKPULL_TICKET') != 'ticket-1':\n"
         "    sys.exit(1)\n"
-        "if {key for key in os.environ if key.startswith('WORKPULL_')} != {'WORKPULL_TICKET'}:\n"
+        "if os.environ.get('WORKPULL_TOKEN') != 'token-1':\n"
+        "    sys.exit(1)\n"
+        "if {key for key in os.environ if key.startswith('WORKPULL_')} != {'WORKPULL_TICKET', 'WORKPULL_TOKEN'}:\n"
         "    sys.exit(1)\n"
         f"sys.stdout.write('{ticket_id}\\n')\n"
     )
@@ -52,17 +54,19 @@ def release_outcome(result: Result) -> TicketOutcome:
 
 @pytest.fixture
 def run_release(runner: CliRunner) -> RunRelease:
-    def _run(ticket: str, env: dict[str, str], hook_result: HookResult) -> Result:
+    def _run(
+        ticket: str, token: str, env: dict[str, str], hook_result: HookResult
+    ) -> Result:
         def _fake_run_hook(hook: str, hook_env: dict[str, str]) -> HookResult:
             if hook != env.get("RELEASE_HOOK"):
                 return HookResult(1, "", "")
-            if hook_env != {"WORKPULL_TICKET": ticket}:
+            if hook_env != {"WORKPULL_TICKET": ticket, "WORKPULL_TOKEN": token}:
                 return HookResult(1, "", "")
             return hook_result
 
         return runner.invoke(
             cli,
-            ["release", ticket],
+            ["release", ticket, token],
             env=env,
             obj={"run_hook": _fake_run_hook},
         )
@@ -77,7 +81,7 @@ def test_release_happy_path(run_release: RunRelease, ticket_id: str) -> None:
     # WHEN
     env = dict(os.environ)
     env["RELEASE_HOOK"] = "fake-hook"
-    result = run_release("ticket-1", env, HookResult(0, f"{ticket_id}\n", ""))
+    result = run_release("ticket-1", "token-1", env, HookResult(0, f"{ticket_id}\n", ""))
     # THEN
     assert result.exception is None
     actual: TicketOutcome = release_outcome(result)
@@ -89,10 +93,10 @@ def test_release_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFiles
     expected: TicketOutcome = {"exit_code": 0, "ticket_id": "ticket-1"}
     # WHEN
     with isolated_filesystem():
-        hook = write_mock_hook("ticket-1", hook_command)
+        hook = write_mock_hook("ticket-1", "token-1", hook_command)
         env = dict(os.environ)
         env["RELEASE_HOOK"] = hook
-        result = runner.invoke(cli, ["release", "ticket-1"], env=env, obj={})
+        result = runner.invoke(cli, ["release", "ticket-1", "token-1"], env=env, obj={})
     # THEN
     assert result.exception is None
     actual: TicketOutcome = release_outcome(result)
@@ -105,7 +109,7 @@ def test_release_missing_hook(run_release: RunRelease) -> None:
     # WHEN
     env = dict(os.environ)
     env.pop("RELEASE_HOOK", None)
-    result = run_release("ticket-1", env, HookResult(0, "ticket-1\n", ""))
+    result = run_release("ticket-1", "token-1", env, HookResult(0, "ticket-1\n", ""))
     # THEN
     actual: TicketOutcome = release_outcome(result)
     assert expected == actual
@@ -117,7 +121,7 @@ def test_release_failing_hook(run_release: RunRelease) -> None:
     # WHEN
     env = dict(os.environ)
     env["RELEASE_HOOK"] = "fake-hook"
-    result = run_release("ticket-1", env, HookResult(3, "", ""))
+    result = run_release("ticket-1", "token-1", env, HookResult(3, "", ""))
     # THEN
     actual: TicketOutcome = release_outcome(result)
     assert expected == actual
@@ -129,7 +133,7 @@ def test_release_empty_ticket_id(run_release: RunRelease) -> None:
     # WHEN
     env = dict(os.environ)
     env["RELEASE_HOOK"] = "fake-hook"
-    result = run_release("ticket-1", env, HookResult(0, "", ""))
+    result = run_release("ticket-1", "token-1", env, HookResult(0, "", ""))
     # THEN
     actual: TicketOutcome = release_outcome(result)
     assert expected == actual
@@ -140,7 +144,7 @@ def test_release_help(runner: CliRunner, normalize_help: NormalizeHelp) -> None:
     expected: HelpOutcome = {
         "exit_code": 0,
         "help_text": normalize_help(
-            """Usage: cli release [OPTIONS] TICKET
+            """Usage: cli release [OPTIONS] TICKET TOKEN
 
             Release a ticket's claim.
 
