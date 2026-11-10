@@ -309,6 +309,35 @@ def get_state(ticket: str, run_hook_fn: RunHook) -> None:
     click.echo(state)
 
 
+def _fetch_current_state(ticket: str, run_hook_fn: RunHook) -> str:
+    hook = os.environ["GET_STATE_HOOK"]
+    result = run_hook_fn(hook, {"WORKPULL_TICKET": ticket})
+    return result.stdout.strip()
+
+
+def _fetch_describe_view(run_hook_fn: RunHook) -> dict[str, Any]:
+    hook = os.environ["DESCRIBE_HOOK"]
+    result = run_hook_fn(hook, {})
+    return tomllib.loads(result.stdout)
+
+
+def _fetch_wait_count(to_state: str, run_hook_fn: RunHook) -> int:
+    hook = os.environ["COUNT_HOOK"]
+    result = run_hook_fn(hook, {"WORKPULL_STATE": to_state})
+    counts = tomllib.loads(result.stdout)
+    return counts["wait"]
+
+
+def can_transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> None:
+    """Check whether a ticket can move to a state."""
+    current_state = _fetch_current_state(ticket, run_hook_fn)
+    view = _fetch_describe_view(run_hook_fn)
+    wait_count = _fetch_wait_count(to_state, run_hook_fn)
+    reachable = view["transitions"].get(current_state) == to_state
+    wait_limit = view["wip_limits"][to_state]["wait"]
+    click.echo("true" if reachable and wait_count < wait_limit else "false")
+
+
 def transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> None:
     """Move a ticket to a wait state."""
     hook = os.environ.get("TRANSITION_HOOK")
@@ -372,6 +401,15 @@ def count_command(ctx: click.Context, state: str) -> None:
 def get_state_command(ctx: click.Context, ticket: str) -> None:
     """Get a ticket's current state."""
     get_state(ticket, ctx.obj["run_hook"])
+
+
+@cli.command(name="can-transition")
+@click.argument("ticket")
+@click.argument("to_state")
+@click.pass_context
+def can_transition_command(ctx: click.Context, ticket: str, to_state: str) -> None:
+    """Check whether a ticket can move to a state."""
+    can_transition(ticket, to_state, ctx.obj["run_hook"])
 
 
 @cli.command(name="transition")
