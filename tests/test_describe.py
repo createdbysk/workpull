@@ -29,6 +29,7 @@ Done = {work = inf, wait = inf}
 """
 
 
+# A WIP limit is a positive int, or inf, the only float allowed.
 class WipLimits(TypedDict, total=False):
     work: int | float
     wait: int | float

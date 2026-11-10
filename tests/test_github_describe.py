@@ -23,6 +23,7 @@ ADAPTER = ROOT / "plugins" / "github" / "describe.py"
 RunCli = Callable[[dict[str, str]], subprocess.CompletedProcess[str]]
 
 
+# A WIP limit is a positive int, or inf, the only float allowed.
 class WipLimits(TypedDict, total=False):
     work: int | float
     wait: int | float
