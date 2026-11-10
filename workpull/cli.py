@@ -278,9 +278,17 @@ def release(ticket: str, run_hook_fn: RunHook) -> None:
 
 def transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> None:
     """Move a ticket to a wait state."""
-    hook = os.environ["TRANSITION_HOOK"]
+    hook = os.environ.get("TRANSITION_HOOK")
+    if not hook:
+        click.echo("TRANSITION_HOOK is not set", err=True)
+        raise click.exceptions.Exit(2)
     result = run_hook_fn(hook, {"WORKPULL_TICKET": ticket, "WORKPULL_TO_STATE": to_state})
+    if result.returncode != 0:
+        raise click.exceptions.Exit(result.returncode)
     ticket_id = result.stdout.strip()
+    if not ticket_id:
+        click.echo("transition hook returned no ticket id", err=True)
+        raise click.exceptions.Exit(2)
     click.echo(ticket_id)
 
 

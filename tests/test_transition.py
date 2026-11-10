@@ -105,6 +105,42 @@ def test_transition_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFi
     assert expected == actual
 
 
+def test_transition_missing_hook(run_transition: RunTransition) -> None:
+    # GIVEN
+    expected: TicketOutcome = {"exit_code": 2, "ticket_id": None}
+    # WHEN
+    env = dict(os.environ)
+    env.pop("TRANSITION_HOOK", None)
+    result = run_transition("ticket-1", "In Progress", env, HookResult(0, "ticket-1\n", ""))
+    # THEN
+    actual: TicketOutcome = transition_outcome(result)
+    assert expected == actual
+
+
+def test_transition_failing_hook(run_transition: RunTransition) -> None:
+    # GIVEN
+    expected: TicketOutcome = {"exit_code": 3, "ticket_id": None}
+    # WHEN
+    env = dict(os.environ)
+    env["TRANSITION_HOOK"] = "fake-hook"
+    result = run_transition("ticket-1", "In Progress", env, HookResult(3, "", ""))
+    # THEN
+    actual: TicketOutcome = transition_outcome(result)
+    assert expected == actual
+
+
+def test_transition_empty_ticket_id(run_transition: RunTransition) -> None:
+    # GIVEN
+    expected: TicketOutcome = {"exit_code": 2, "ticket_id": None}
+    # WHEN
+    env = dict(os.environ)
+    env["TRANSITION_HOOK"] = "fake-hook"
+    result = run_transition("ticket-1", "In Progress", env, HookResult(0, "", ""))
+    # THEN
+    actual: TicketOutcome = transition_outcome(result)
+    assert expected == actual
+
+
 def test_transition_help(runner: CliRunner, normalize_help: NormalizeHelp) -> None:
     # GIVEN
     expected: HelpOutcome = {
