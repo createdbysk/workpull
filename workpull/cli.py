@@ -276,6 +276,13 @@ def release(ticket: str, run_hook_fn: RunHook) -> None:
     click.echo(ticket_id)
 
 
+def count(state: str, run_hook_fn: RunHook) -> None:
+    """Count tickets in a state."""
+    hook = os.environ["COUNT_HOOK"]
+    result = run_hook_fn(hook, {"WORKPULL_STATE": state})
+    click.echo(result.stdout.strip())
+
+
 def transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> None:
     """Move a ticket to a wait state."""
     hook = os.environ.get("TRANSITION_HOOK")
@@ -323,6 +330,14 @@ def prioritize_command(ctx: click.Context, ticket: str, after: str) -> None:
 def release_command(ctx: click.Context, ticket: str) -> None:
     """Release a ticket's claim."""
     release(ticket, ctx.obj["run_hook"])
+
+
+@cli.command(name="count")
+@click.argument("state")
+@click.pass_context
+def count_command(ctx: click.Context, state: str) -> None:
+    """Count tickets in a state."""
+    count(state, ctx.obj["run_hook"])
 
 
 @cli.command(name="transition")
