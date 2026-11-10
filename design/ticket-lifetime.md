@@ -173,7 +173,9 @@ Someone else can claim it again. The command is
 
 When work in a state is finished, the ticket moves into
 the wait state for the next state. The claiming actor
-moves it. Claim ends on the move.
+moves it. Claim ends on the move. The command is
+`transition <ticket> <to-state>`, ticket id and to-state,
+no from-state.
 
 - State: Wait state for the next state, example, changed
   from Backlog

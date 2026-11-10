@@ -276,6 +276,14 @@ def release(ticket: str, run_hook_fn: RunHook) -> None:
     click.echo(ticket_id)
 
 
+def transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> None:
+    """Move a ticket to a wait state."""
+    hook = os.environ["TRANSITION_HOOK"]
+    result = run_hook_fn(hook, {"WORKPULL_TICKET": ticket, "WORKPULL_TO_STATE": to_state})
+    ticket_id = result.stdout.strip()
+    click.echo(ticket_id)
+
+
 @cli.command(name="adopt")
 @click.argument("ticket")
 @click.pass_context
@@ -307,6 +315,15 @@ def prioritize_command(ctx: click.Context, ticket: str, after: str) -> None:
 def release_command(ctx: click.Context, ticket: str) -> None:
     """Release a ticket's claim."""
     release(ticket, ctx.obj["run_hook"])
+
+
+@cli.command(name="transition")
+@click.argument("ticket")
+@click.argument("to_state")
+@click.pass_context
+def transition_command(ctx: click.Context, ticket: str, to_state: str) -> None:
+    """Move a ticket to a wait state."""
+    transition(ticket, to_state, ctx.obj["run_hook"])
 
 
 @cli.command(name="describe")

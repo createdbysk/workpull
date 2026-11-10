@@ -43,6 +43,7 @@ def test_top_level_help_lists_commands(runner: CliRunner, normalize_help: Normal
               describe      Describe a backend's states and transitions.
               prioritize    Move a ticket to a new priority.
               release       Release a ticket's claim.
+              transition    Move a ticket to a wait state.
             """
         ),
     }
