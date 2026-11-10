@@ -83,6 +83,42 @@ def test_count_happy_path(run_count: RunCount) -> None:
     assert expected == actual
 
 
+def test_count_missing_hook(run_count: RunCount) -> None:
+    # GIVEN
+    expected: CountOutcome = {"exit_code": 2, "output": None}
+    # WHEN
+    env = dict(os.environ)
+    env.pop("COUNT_HOOK", None)
+    result = run_count("In Progress", env, HookResult(0, "wait = 2\nwork = 3\n", ""))
+    # THEN
+    actual: CountOutcome = count_outcome(result)
+    assert expected == actual
+
+
+def test_count_failing_hook(run_count: RunCount) -> None:
+    # GIVEN
+    expected: CountOutcome = {"exit_code": 3, "output": None}
+    # WHEN
+    env = dict(os.environ)
+    env["COUNT_HOOK"] = "fake-hook"
+    result = run_count("In Progress", env, HookResult(3, "", ""))
+    # THEN
+    actual: CountOutcome = count_outcome(result)
+    assert expected == actual
+
+
+def test_count_invalid_toml(run_count: RunCount) -> None:
+    # GIVEN
+    expected: CountOutcome = {"exit_code": 2, "output": None}
+    # WHEN
+    env = dict(os.environ)
+    env["COUNT_HOOK"] = "fake-hook"
+    result = run_count("In Progress", env, HookResult(0, "wait = \n", ""))
+    # THEN
+    actual: CountOutcome = count_outcome(result)
+    assert expected == actual
+
+
 def test_count_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
     # GIVEN
     expected: CountOutcome = {"exit_code": 0, "output": "wait = 2\nwork = 3"}

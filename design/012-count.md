@@ -44,6 +44,8 @@
   state itself.
 - Hook exit 0 means counted. The CLI exits 0 and prints
   the hook output, the two TOML lines, and nothing else.
+- Hook exit 0 with output that is not valid TOML means
+  not counted. The CLI exits 2, and prints no output.
 - The CLI does not validate a state. The backend
   validates it.
 

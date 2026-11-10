@@ -278,8 +278,18 @@ def release(ticket: str, run_hook_fn: RunHook) -> None:
 
 def count(state: str, run_hook_fn: RunHook) -> None:
     """Count tickets in a state."""
-    hook = os.environ["COUNT_HOOK"]
+    hook = os.environ.get("COUNT_HOOK")
+    if not hook:
+        click.echo("COUNT_HOOK is not set", err=True)
+        raise click.exceptions.Exit(2)
     result = run_hook_fn(hook, {"WORKPULL_STATE": state})
+    if result.returncode != 0:
+        raise click.exceptions.Exit(result.returncode)
+    try:
+        tomllib.loads(result.stdout)
+    except tomllib.TOMLDecodeError as exc:
+        click.echo(f"count hook output is not valid TOML: {exc}", err=True)
+        raise click.exceptions.Exit(2)
     click.echo(result.stdout.strip())
 
 
