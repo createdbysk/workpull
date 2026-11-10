@@ -61,6 +61,10 @@
 - Invalid describe output, under the describe contract,
   means no decision. The CLI exits 2, and prints no
   answer.
+- Invalid count output, under the count contract, means
+  no decision. The CLI exits 2, and prints no answer.
+  Count output is exactly `wait` and `work`, each a
+  non-negative integer.
 - An empty state from get-state means no decision. The
   CLI exits 2, and prints no answer.
 

@@ -310,21 +310,63 @@ def get_state(ticket: str, run_hook_fn: RunHook) -> None:
 
 
 def _fetch_current_state(ticket: str, run_hook_fn: RunHook) -> str:
-    hook = os.environ["GET_STATE_HOOK"]
+    hook = os.environ.get("GET_STATE_HOOK")
+    if not hook:
+        click.echo("GET_STATE_HOOK is not set", err=True)
+        raise click.exceptions.Exit(2)
     result = run_hook_fn(hook, {"WORKPULL_TICKET": ticket})
-    return result.stdout.strip()
+    if result.returncode != 0:
+        raise click.exceptions.Exit(result.returncode)
+    state = result.stdout.strip()
+    if not state:
+        click.echo("get-state hook returned no state", err=True)
+        raise click.exceptions.Exit(2)
+    return state
 
 
 def _fetch_describe_view(run_hook_fn: RunHook) -> dict[str, Any]:
-    hook = os.environ["DESCRIBE_HOOK"]
+    hook = os.environ.get("DESCRIBE_HOOK")
+    if not hook:
+        click.echo("DESCRIBE_HOOK is not set", err=True)
+        raise click.exceptions.Exit(2)
     result = run_hook_fn(hook, {})
-    return tomllib.loads(result.stdout)
+    if result.returncode != 0:
+        raise click.exceptions.Exit(result.returncode)
+    try:
+        view = tomllib.loads(result.stdout)
+    except tomllib.TOMLDecodeError as exc:
+        click.echo(f"describe hook output is not valid TOML: {exc}", err=True)
+        raise click.exceptions.Exit(2)
+    error = validate_describe(view)
+    if error:
+        click.echo(f"invalid describe output: {error}", err=True)
+        raise click.exceptions.Exit(2)
+    return view
 
 
 def _fetch_wait_count(to_state: str, run_hook_fn: RunHook) -> int:
-    hook = os.environ["COUNT_HOOK"]
+    hook = os.environ.get("COUNT_HOOK")
+    if not hook:
+        click.echo("COUNT_HOOK is not set", err=True)
+        raise click.exceptions.Exit(2)
     result = run_hook_fn(hook, {"WORKPULL_STATE": to_state})
-    counts = tomllib.loads(result.stdout)
+    if result.returncode != 0:
+        raise click.exceptions.Exit(result.returncode)
+    try:
+        counts = tomllib.loads(result.stdout)
+    except tomllib.TOMLDecodeError as exc:
+        click.echo(f"count hook output is not valid TOML: {exc}", err=True)
+        raise click.exceptions.Exit(2)
+    if (
+        not isinstance(counts, dict)
+        or set(counts) != {"wait", "work"}
+        or any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in counts.values()
+        )
+    ):
+        click.echo("invalid count output: expected wait and work counts", err=True)
+        raise click.exceptions.Exit(2)
     return counts["wait"]
 
 
@@ -332,6 +374,9 @@ def can_transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> None:
     """Check whether a ticket can move to a state."""
     current_state = _fetch_current_state(ticket, run_hook_fn)
     view = _fetch_describe_view(run_hook_fn)
+    if to_state not in view["wip_limits"]:
+        click.echo("false")
+        return
     wait_count = _fetch_wait_count(to_state, run_hook_fn)
     reachable = view["transitions"].get(current_state) == to_state
     wait_limit = view["wip_limits"][to_state]["wait"]
