@@ -34,6 +34,10 @@
 
 - Hook exit 0 means found. The CLI exits 0 and prints
   the state name, and nothing else.
+- A ticket in wait is in the state it waits for, not
+  the work state it left, because that is where the
+  ticket is now. Get state returns the waiting-for
+  state for a waiting ticket.
 - Hook exit non-zero means not found. The CLI preserves
   that exit code, and prints no state name.
 - Hook exit 0 with empty stdout means not found. Exit
