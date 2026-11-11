@@ -18,7 +18,7 @@ class TransitionRun(NamedTuple):
 
 
 RunTransition = Callable[
-    [str, str, str, dict[str, str], HookResult, HookResult, HookResult, HookResult],
+    [str, str, str, dict[str, str], HookResult, HookResult, HookResult, HookResult, HookResult],
     TransitionRun,
 ]
 IsolatedFilesystem = Callable[[], contextlib.AbstractContextManager[str]]
@@ -79,6 +79,13 @@ class TransitionHookFailureCase(NamedTuple):
     expected_exit_code: int
 
 
+class SystemMoveFailureCase(NamedTuple):
+    case_name: str
+    system_move_hook_set: bool
+    system_move_result: HookResult
+    expected_exit_code: int
+
+
 class TransitionCheckInvalidCase(NamedTuple):
     case_name: str
     to_state: str
@@ -110,6 +117,10 @@ def _unknown_state_case_id(case: TransitionUnknownStateCase) -> str:
 
 
 def _hook_failure_case_id(case: TransitionHookFailureCase) -> str:
+    return case.case_name
+
+
+def _system_move_failure_case_id(case: SystemMoveFailureCase) -> str:
     return case.case_name
 
 
@@ -154,6 +165,34 @@ def write_mock_count_hook(hook_command: HookCommand) -> str:
     return hook_command("mock_count.py")
 
 
+def write_mock_count_hook_below_work_limit(hook_command: HookCommand) -> str:
+    hook = Path("mock_count.py")
+    hook.write_text(
+        "import os, sys\n"
+        "if os.environ.get('WORKPULL_STATE') != 'In Progress':\n"
+        "    sys.exit(1)\n"
+        "if {key for key in os.environ if key.startswith('WORKPULL_')} != {'WORKPULL_STATE'}:\n"
+        "    sys.exit(1)\n"
+        "sys.stdout.write('wait = 1\\nwork = 2\\n')\n"
+    )
+    return hook_command("mock_count.py")
+
+
+def write_mock_system_move_hook(hook_command: HookCommand) -> str:
+    hook = Path("mock_system_move.py")
+    hook.write_text(
+        "import os, sys\n"
+        "if os.environ.get('WORKPULL_TICKET') != 'ticket-1':\n"
+        "    sys.exit(1)\n"
+        "if os.environ.get('WORKPULL_TO_STATE') != 'In Progress':\n"
+        "    sys.exit(1)\n"
+        "if {key for key in os.environ if key.startswith('WORKPULL_')} != {'WORKPULL_TICKET', 'WORKPULL_TO_STATE'}:\n"
+        "    sys.exit(1)\n"
+        "sys.stdout.write('ticket-1\\n')\n"
+    )
+    return hook_command("mock_system_move.py")
+
+
 def write_mock_hook(ticket_id: str, to_state: str, hook_command: HookCommand) -> str:
     hook = Path("mock_transition.py")
     hook.write_text(
@@ -191,6 +230,7 @@ def run_transition(runner: CliRunner) -> RunTransition:
         describe_result: HookResult,
         count_result: HookResult,
         transition_result: HookResult,
+        system_move_result: HookResult,
     ) -> TransitionRun:
         called_hooks: list[str] = []
 
@@ -216,6 +256,13 @@ def run_transition(runner: CliRunner) -> RunTransition:
                 }:
                     return HookResult(1, "", "")
                 return transition_result
+            if hook == env.get("SYSTEM_MOVE_HOOK"):
+                if hook_env != {
+                    "WORKPULL_TICKET": transition_result.stdout.strip(),
+                    "WORKPULL_TO_STATE": to_state,
+                }:
+                    return HookResult(1, "", "")
+                return system_move_result
             return HookResult(1, "", "")
 
         result = runner.invoke(
@@ -267,6 +314,7 @@ def test_transition_happy_path(
     env["DESCRIBE_HOOK"] = "fake-describe"
     env["COUNT_HOOK"] = "fake-count"
     env["TRANSITION_HOOK"] = "fake-transition"
+    env["SYSTEM_MOVE_HOOK"] = "fake-system-move"
     run = run_transition(
         "ticket-1",
         case.to_state,
@@ -275,6 +323,7 @@ def test_transition_happy_path(
         HookResult(0, f"{case.current_state}\n", ""),
         HookResult(0, DESCRIBE_VIEW, ""),
         HookResult(0, f"wait = {case.wait_count}\nwork = 3\n", ""),
+        HookResult(0, f"{case.ticket_id}\n", ""),
         HookResult(0, f"{case.ticket_id}\n", ""),
     )
     result = run.result
@@ -336,6 +385,7 @@ def test_transition_check_is_false(
         HookResult(0, DESCRIBE_VIEW, ""),
         HookResult(0, f"wait = {case.wait_count}\nwork = 3\n", ""),
         HookResult(0, "ticket-1\n", ""),
+        HookResult(0, "ticket-1\n", ""),
     )
     result = run.result
     # THEN
@@ -382,6 +432,7 @@ def test_transition_check_missing_hook(
         HookResult(0, "Backlog\n", ""),
         HookResult(0, DESCRIBE_VIEW, ""),
         HookResult(0, "wait = 1\nwork = 3\n", ""),
+        HookResult(0, "ticket-1\n", ""),
         HookResult(0, "ticket-1\n", ""),
     )
     result = run.result
@@ -439,6 +490,7 @@ def test_transition_check_failing_hook(
         describe_result,
         count_result,
         HookResult(0, "ticket-1\n", ""),
+        HookResult(0, "ticket-1\n", ""),
     )
     result = run.result
     # THEN
@@ -487,6 +539,7 @@ def test_transition_check_invalid_toml(
         HookResult(0, "Backlog\n", ""),
         describe_result,
         count_result,
+        HookResult(0, "ticket-1\n", ""),
         HookResult(0, "ticket-1\n", ""),
     )
     result = run.result
@@ -551,6 +604,7 @@ def test_transition_check_invalid_output(
         HookResult(0, case.describe_stdout, ""),
         HookResult(0, case.count_stdout, ""),
         HookResult(0, "ticket-1\n", ""),
+        HookResult(0, "ticket-1\n", ""),
     )
     result = run.result
     # THEN
@@ -597,6 +651,7 @@ def test_transition_check_unknown_state(
         HookResult(0, DESCRIBE_VIEW, ""),
         HookResult(0, "wait = 1\nwork = 3\n", ""),
         HookResult(0, "ticket-1\n", ""),
+        HookResult(0, "ticket-1\n", ""),
     )
     result = run.result
     # THEN
@@ -604,6 +659,183 @@ def test_transition_check_unknown_state(
     assert expected == actual
     assert "fake-transition" not in run.called_hooks
     assert ("fake-count" in run.called_hooks) == case.count_called
+
+
+class SystemMoveHappyCase(NamedTuple):
+    case_name: str
+    current_state: str
+    to_state: str
+    wait_count: int
+    work_count: int
+    ticket_id: str
+    system_move_called: bool
+
+
+def _system_move_happy_case_id(case: SystemMoveHappyCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        SystemMoveHappyCase(
+            case_name="capacity_available",
+            current_state="Backlog",
+            to_state="In Progress",
+            wait_count=1,
+            work_count=2,
+            ticket_id="ticket-1",
+            system_move_called=True,
+        ),
+        SystemMoveHappyCase(
+            case_name="no_capacity_at_limit",
+            current_state="Backlog",
+            to_state="In Progress",
+            wait_count=1,
+            work_count=3,
+            ticket_id="ticket-1",
+            system_move_called=False,
+        ),
+        SystemMoveHappyCase(
+            case_name="inf_work_limit",
+            current_state="In Progress",
+            to_state="Done",
+            wait_count=1,
+            work_count=99,
+            ticket_id="ticket-1",
+            system_move_called=True,
+        ),
+        SystemMoveHappyCase(
+            case_name="ticket_0",
+            current_state="Backlog",
+            to_state="In Progress",
+            wait_count=1,
+            work_count=2,
+            ticket_id="0",
+            system_move_called=True,
+        ),
+    ],
+    ids=_system_move_happy_case_id,
+)
+def test_transition_system_move(
+    run_transition: RunTransition, case: SystemMoveHappyCase
+) -> None:
+    # GIVEN
+    expected: TicketOutcome = {"exit_code": 0, "ticket_id": case.ticket_id}
+    # WHEN
+    env = dict(os.environ)
+    env["GET_STATE_HOOK"] = "fake-get-state"
+    env["DESCRIBE_HOOK"] = "fake-describe"
+    env["COUNT_HOOK"] = "fake-count"
+    env["TRANSITION_HOOK"] = "fake-transition"
+    env["SYSTEM_MOVE_HOOK"] = "fake-system-move"
+    run = run_transition(
+        "ticket-1",
+        case.to_state,
+        "token-1",
+        env,
+        HookResult(0, f"{case.current_state}\n", ""),
+        HookResult(0, DESCRIBE_VIEW, ""),
+        HookResult(0, f"wait = {case.wait_count}\nwork = {case.work_count}\n", ""),
+        HookResult(0, f"{case.ticket_id}\n", ""),
+        HookResult(0, f"{case.ticket_id}\n", ""),
+    )
+    result = run.result
+    # THEN
+    assert result.exception is None
+    actual: TicketOutcome = transition_outcome(result)
+    assert expected == actual
+    assert run.called_hooks.count("fake-system-move") == (
+        1 if case.system_move_called else 0
+    )
+    assert run.called_hooks.count("fake-get-state") == 1
+    assert run.called_hooks.count("fake-transition") == 1
+    assert run.called_hooks.count("fake-count") == 1
+    assert run.called_hooks.count("fake-describe") == 1
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        SystemMoveFailureCase(
+            case_name="missing_hook",
+            system_move_hook_set=False,
+            system_move_result=HookResult(0, "ticket-1\n", ""),
+            expected_exit_code=2,
+        ),
+        SystemMoveFailureCase(
+            case_name="failing_hook",
+            system_move_hook_set=True,
+            system_move_result=HookResult(3, "", ""),
+            expected_exit_code=3,
+        ),
+        SystemMoveFailureCase(
+            case_name="empty_ticket_id",
+            system_move_hook_set=True,
+            system_move_result=HookResult(0, "", ""),
+            expected_exit_code=2,
+        ),
+    ],
+    ids=_system_move_failure_case_id,
+)
+def test_transition_system_move_failure(
+    run_transition: RunTransition, case: SystemMoveFailureCase
+) -> None:
+    # GIVEN
+    expected: TicketOutcome = {
+        "exit_code": case.expected_exit_code,
+        "ticket_id": None,
+    }
+    # WHEN
+    env = dict(os.environ)
+    env["GET_STATE_HOOK"] = "fake-get-state"
+    env["DESCRIBE_HOOK"] = "fake-describe"
+    env["COUNT_HOOK"] = "fake-count"
+    env["TRANSITION_HOOK"] = "fake-transition"
+    if case.system_move_hook_set:
+        env["SYSTEM_MOVE_HOOK"] = "fake-system-move"
+    else:
+        env.pop("SYSTEM_MOVE_HOOK", None)
+    run = run_transition(
+        "ticket-1",
+        "In Progress",
+        "token-1",
+        env,
+        HookResult(0, "Backlog\n", ""),
+        HookResult(0, DESCRIBE_VIEW, ""),
+        HookResult(0, "wait = 1\nwork = 2\n", ""),
+        HookResult(0, "ticket-1\n", ""),
+        case.system_move_result,
+    )
+    result = run.result
+    # THEN
+    actual: TicketOutcome = transition_outcome(result)
+    assert expected == actual
+
+
+def test_transition_system_move_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
+    # GIVEN
+    expected: TicketOutcome = {"exit_code": 0, "ticket_id": "ticket-1"}
+    # WHEN
+    with isolated_filesystem():
+        get_state_hook = write_mock_get_state_hook(hook_command)
+        describe_hook = write_mock_describe_hook(hook_command)
+        count_hook = write_mock_count_hook_below_work_limit(hook_command)
+        hook = write_mock_hook("ticket-1", "In Progress", hook_command)
+        system_move_hook = write_mock_system_move_hook(hook_command)
+        env = dict(os.environ)
+        env["GET_STATE_HOOK"] = get_state_hook
+        env["DESCRIBE_HOOK"] = describe_hook
+        env["COUNT_HOOK"] = count_hook
+        env["TRANSITION_HOOK"] = hook
+        env["SYSTEM_MOVE_HOOK"] = system_move_hook
+        result = runner.invoke(
+            cli, ["transition", "ticket-1", "In Progress", "token-1"], env=env, obj={}
+        )
+    # THEN
+    assert result.exception is None
+    actual: TicketOutcome = transition_outcome(result)
+    assert expected == actual
 
 
 def test_transition_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
@@ -679,6 +911,7 @@ def test_transition_hook_failure(
         HookResult(0, DESCRIBE_VIEW, ""),
         HookResult(0, "wait = 1\nwork = 3\n", ""),
         case.transition_result,
+        HookResult(0, "ticket-1\n", ""),
     )
     result = run.result
     # THEN

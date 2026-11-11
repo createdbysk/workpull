@@ -379,7 +379,18 @@ def _fetch_describe_view(run_hook_fn: RunHook) -> dict[str, Any]:
     return view
 
 
-def _fetch_wait_count(to_state: str, run_hook_fn: RunHook) -> int:
+class StateCounts(NamedTuple):
+    wait: int
+    work: int
+
+
+class TransitionCheck(NamedTuple):
+    allowed: bool
+    view: dict[str, Any]
+    work_count: int
+
+
+def _fetch_counts(to_state: str, run_hook_fn: RunHook) -> StateCounts:
     hook = os.environ.get("COUNT_HOOK")
     if not hook:
         click.echo("COUNT_HOOK is not set", err=True)
@@ -396,30 +407,56 @@ def _fetch_wait_count(to_state: str, run_hook_fn: RunHook) -> int:
     if error:
         click.echo(error, err=True)
         raise click.exceptions.Exit(2)
-    return counts["wait"]
+    return StateCounts(wait=counts["wait"], work=counts["work"])
 
 
-def _can_transition_decision(ticket: str, to_state: str, run_hook_fn: RunHook) -> bool:
+def _check_transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> TransitionCheck:
     current_state = _fetch_current_state(ticket, run_hook_fn)
     view = _fetch_describe_view(run_hook_fn)
     if to_state not in view["wip_limits"]:
-        return False
-    wait_count = _fetch_wait_count(to_state, run_hook_fn)
+        return TransitionCheck(allowed=False, view=view, work_count=0)
+    counts = _fetch_counts(to_state, run_hook_fn)
     reachable = view["transitions"].get(current_state) == to_state
     wait_limit = view["wip_limits"][to_state]["wait"]
-    return reachable and wait_count < wait_limit
+    return TransitionCheck(
+        allowed=reachable and counts.wait < wait_limit,
+        view=view,
+        work_count=counts.work,
+    )
 
 
 def can_transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> None:
     """Check whether a ticket can move to a state."""
-    click.echo(
-        "true" if _can_transition_decision(ticket, to_state, run_hook_fn) else "false"
-    )
+    check = _check_transition(ticket, to_state, run_hook_fn)
+    click.echo("true" if check.allowed else "false")
+
+
+def _move_ticket_immediately_if_capacity(
+    ticket: str,
+    to_state: str,
+    work_count: int,
+    work_limit: int | float,
+    run_hook_fn: RunHook,
+) -> None:
+    if work_count < work_limit:
+        hook = os.environ.get("SYSTEM_MOVE_HOOK")
+        if not hook:
+            click.echo("SYSTEM_MOVE_HOOK is not set", err=True)
+            raise click.exceptions.Exit(2)
+        result = run_hook_fn(
+            hook, {"WORKPULL_TICKET": ticket, "WORKPULL_TO_STATE": to_state}
+        )
+        if result.returncode != 0:
+            raise click.exceptions.Exit(result.returncode)
+        if not result.stdout.strip():
+            click.echo("system move hook returned no ticket id", err=True)
+            raise click.exceptions.Exit(2)
 
 
 def transition(ticket: str, to_state: str, token: str, run_hook_fn: RunHook) -> None:
     """Move a ticket to a wait state."""
-    if not _can_transition_decision(ticket, to_state, run_hook_fn):
+    check = _check_transition(ticket, to_state, run_hook_fn)
+    if not check.allowed:
         click.echo("transition is not allowed", err=True)
         raise click.exceptions.Exit(2)
     hook = os.environ.get("TRANSITION_HOOK")
@@ -440,6 +477,13 @@ def transition(ticket: str, to_state: str, token: str, run_hook_fn: RunHook) -> 
     if not ticket_id:
         click.echo("transition hook returned no ticket id", err=True)
         raise click.exceptions.Exit(2)
+    _move_ticket_immediately_if_capacity(
+        ticket_id,
+        to_state,
+        check.work_count,
+        check.view["wip_limits"][to_state]["work"],
+        run_hook_fn,
+    )
     click.echo(ticket_id)
 
 
