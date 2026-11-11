@@ -41,7 +41,10 @@
 
   `wait` is the number of tickets in that state's
   wait state, `work` is the number of tickets in the
-  state itself.
+  state itself. Work counts tickets whose work state
+  is that state, including a ticket in wait that left
+  it, so a waiting ticket counts as work in the state
+  it left and as wait in the state it waits for.
 - Hook exit 0 means counted. The CLI exits 0 and prints
   the hook output, the two TOML lines, and nothing else.
 - Hook exit 0 with output that is not valid TOML means

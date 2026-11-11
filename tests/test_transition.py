@@ -941,3 +941,524 @@ def test_transition_help(runner: CliRunner, normalize_help: NormalizeHelp) -> No
         "help_text": normalize_help(result.output),
     }
     assert expected == actual
+
+
+class PullRun(NamedTuple):
+    result: Result
+    called_hooks: tuple[str, ...]
+
+
+RunTransitionPull = Callable[
+    [
+        str,
+        str,
+        str,
+        str,
+        str,
+        dict[str, str],
+        HookResult,
+        HookResult,
+        HookResult,
+        HookResult,
+        HookResult,
+        HookResult,
+        HookResult,
+        HookResult,
+    ],
+    PullRun,
+]
+
+
+@pytest.fixture
+def run_transition_pull(runner: CliRunner) -> RunTransitionPull:
+    def _run(
+        ticket: str,
+        to_state: str,
+        token: str,
+        old_state: str,
+        pull_ticket: str,
+        env: dict[str, str],
+        get_state_result: HookResult,
+        describe_result: HookResult,
+        count_to_result: HookResult,
+        count_old_result: HookResult,
+        transition_result: HookResult,
+        system_move_result: HookResult,
+        pull_system_move_result: HookResult,
+        list_waiting_result: HookResult,
+    ) -> PullRun:
+        called_hooks: list[str] = []
+
+        def _fake_run_hook(hook: str, hook_env: dict[str, str]) -> HookResult:
+            called_hooks.append(hook)
+            if hook == env.get("GET_STATE_HOOK"):
+                if hook_env != {"WORKPULL_TICKET": ticket}:
+                    return HookResult(1, "", "")
+                return get_state_result
+            if hook == env.get("DESCRIBE_HOOK"):
+                if hook_env != {}:
+                    return HookResult(1, "", "")
+                return describe_result
+            if hook == env.get("COUNT_HOOK"):
+                if hook_env == {"WORKPULL_STATE": to_state}:
+                    return count_to_result
+                if hook_env == {"WORKPULL_STATE": old_state}:
+                    return count_old_result
+                return HookResult(1, "", "")
+            if hook == env.get("TRANSITION_HOOK"):
+                if hook_env != {
+                    "WORKPULL_TICKET": ticket,
+                    "WORKPULL_TO_STATE": to_state,
+                    "WORKPULL_TOKEN": token,
+                }:
+                    return HookResult(1, "", "")
+                return transition_result
+            if hook == env.get("SYSTEM_MOVE_HOOK"):
+                if hook_env == {
+                    "WORKPULL_TICKET": transition_result.stdout.strip(),
+                    "WORKPULL_TO_STATE": to_state,
+                }:
+                    return system_move_result
+                if hook_env == {
+                    "WORKPULL_TICKET": pull_ticket,
+                    "WORKPULL_TO_STATE": old_state,
+                }:
+                    return pull_system_move_result
+                return HookResult(1, "", "")
+            if hook == env.get("LIST_WAITING_HOOK"):
+                if hook_env != {"WORKPULL_STATE": old_state}:
+                    return HookResult(1, "", "")
+                return list_waiting_result
+            return HookResult(1, "", "")
+
+        result = runner.invoke(
+            cli,
+            ["transition", ticket, to_state, token],
+            env=env,
+            obj={"run_hook": _fake_run_hook},
+        )
+        return PullRun(result=result, called_hooks=tuple(called_hooks))
+
+    return _run
+
+
+class ListWaitingFailureCase(NamedTuple):
+    case_name: str
+    list_waiting_result: HookResult
+    expected_exit_code: int
+    expected_output: str
+
+
+def _list_waiting_failure_case_id(case: ListWaitingFailureCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        ListWaitingFailureCase(
+            case_name="failing_hook",
+            list_waiting_result=HookResult(3, "", ""),
+            expected_exit_code=3,
+            expected_output="",
+        ),
+        ListWaitingFailureCase(
+            case_name="invalid_toml",
+            list_waiting_result=HookResult(0, "wait = \n", ""),
+            expected_exit_code=2,
+            expected_output="list-waiting hook output is not valid TOML: Invalid value (at line 1, column 8)\n",
+        ),
+        ListWaitingFailureCase(
+            case_name="wrong_shape",
+            list_waiting_result=HookResult(0, 'tickets = "ticket-3"\n', ""),
+            expected_exit_code=2,
+            expected_output="invalid list-waiting output: expected tickets\n",
+        ),
+        ListWaitingFailureCase(
+            case_name="empty_ticket",
+            list_waiting_result=HookResult(0, 'tickets = [""]\n', ""),
+            expected_exit_code=2,
+            expected_output="invalid list-waiting output: expected tickets\n",
+        ),
+        ListWaitingFailureCase(
+            case_name="non_string_ticket",
+            list_waiting_result=HookResult(0, "tickets = [1]\n", ""),
+            expected_exit_code=2,
+            expected_output="invalid list-waiting output: expected tickets\n",
+        ),
+        ListWaitingFailureCase(
+            case_name="extra_key",
+            list_waiting_result=HookResult(0, 'tickets = ["ticket-3"]\nextra = 1\n', ""),
+            expected_exit_code=2,
+            expected_output="invalid list-waiting output: expected tickets\n",
+        ),
+    ],
+    ids=_list_waiting_failure_case_id,
+)
+def test_transition_pull_list_waiting_failure(
+    run_transition_pull: RunTransitionPull, case: ListWaitingFailureCase
+) -> None:
+    # GIVEN
+    expected: TicketOutcome = {"exit_code": case.expected_exit_code, "ticket_id": None}
+    # WHEN
+    env = dict(os.environ)
+    env["GET_STATE_HOOK"] = "fake-get-state"
+    env["DESCRIBE_HOOK"] = "fake-describe"
+    env["COUNT_HOOK"] = "fake-count"
+    env["TRANSITION_HOOK"] = "fake-transition"
+    env["SYSTEM_MOVE_HOOK"] = "fake-system-move"
+    env["LIST_WAITING_HOOK"] = "fake-list-waiting"
+    run = run_transition_pull(
+        "ticket-2",
+        "Done",
+        "token-1",
+        "In Progress",
+        "ticket-3",
+        env,
+        HookResult(0, "In Progress\n", ""),
+        HookResult(0, DESCRIBE_VIEW, ""),
+        HookResult(0, "wait = 0\nwork = 0\n", ""),
+        HookResult(0, "wait = 1\nwork = 0\n", ""),
+        HookResult(0, "ticket-2\n", ""),
+        HookResult(0, "ticket-2\n", ""),
+        HookResult(0, "ticket-3\n", ""),
+        case.list_waiting_result,
+    )
+    result = run.result
+    # THEN
+    actual: TicketOutcome = transition_outcome(result)
+    assert expected == actual
+    assert result.output == case.expected_output
+    assert "fake-list-waiting" in run.called_hooks
+    assert run.called_hooks.count("fake-system-move") == 1
+
+
+def test_transition_pull_count_failure(
+    run_transition_pull: RunTransitionPull,
+) -> None:
+    # GIVEN
+    expected: TicketOutcome = {"exit_code": 3, "ticket_id": None}
+    # WHEN
+    env = dict(os.environ)
+    env["GET_STATE_HOOK"] = "fake-get-state"
+    env["DESCRIBE_HOOK"] = "fake-describe"
+    env["COUNT_HOOK"] = "fake-count"
+    env["TRANSITION_HOOK"] = "fake-transition"
+    env["SYSTEM_MOVE_HOOK"] = "fake-system-move"
+    env["LIST_WAITING_HOOK"] = "fake-list-waiting"
+    run = run_transition_pull(
+        "ticket-2",
+        "Done",
+        "token-1",
+        "In Progress",
+        "ticket-3",
+        env,
+        HookResult(0, "In Progress\n", ""),
+        HookResult(0, DESCRIBE_VIEW, ""),
+        HookResult(0, "wait = 0\nwork = 0\n", ""),
+        HookResult(3, "", ""),
+        HookResult(0, "ticket-2\n", ""),
+        HookResult(0, "ticket-2\n", ""),
+        HookResult(0, "ticket-3\n", ""),
+        HookResult(0, 'tickets = ["ticket-3"]\n', ""),
+    )
+    result = run.result
+    # THEN
+    actual: TicketOutcome = transition_outcome(result)
+    assert expected == actual
+    assert result.output == ""
+    assert "fake-list-waiting" not in run.called_hooks
+    assert run.called_hooks.count("fake-system-move") == 1
+
+
+class PullEarlyReturnCase(NamedTuple):
+    case_name: str
+    count_old_result: HookResult
+    list_waiting_result: HookResult
+    expected_list_calls: int
+    expected_system_move_calls: int
+
+
+def _pull_early_return_case_id(case: PullEarlyReturnCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        PullEarlyReturnCase(
+            case_name="no_capacity",
+            count_old_result=HookResult(0, "wait = 1\nwork = 3\n", ""),
+            list_waiting_result=HookResult(0, 'tickets = ["ticket-3"]\n', ""),
+            expected_list_calls=0,
+            expected_system_move_calls=1,
+        ),
+        PullEarlyReturnCase(
+            case_name="empty_waiting_list",
+            count_old_result=HookResult(0, "wait = 0\nwork = 0\n", ""),
+            list_waiting_result=HookResult(0, "tickets = []\n", ""),
+            expected_list_calls=1,
+            expected_system_move_calls=1,
+        ),
+    ],
+    ids=_pull_early_return_case_id,
+)
+def test_transition_pull_early_return(
+    run_transition_pull: RunTransitionPull, case: PullEarlyReturnCase
+) -> None:
+    # GIVEN
+    expected: TicketOutcome = {"exit_code": 0, "ticket_id": "ticket-2"}
+    # WHEN
+    env = dict(os.environ)
+    env["GET_STATE_HOOK"] = "fake-get-state"
+    env["DESCRIBE_HOOK"] = "fake-describe"
+    env["COUNT_HOOK"] = "fake-count"
+    env["TRANSITION_HOOK"] = "fake-transition"
+    env["SYSTEM_MOVE_HOOK"] = "fake-system-move"
+    env["LIST_WAITING_HOOK"] = "fake-list-waiting"
+    run = run_transition_pull(
+        "ticket-2",
+        "Done",
+        "token-1",
+        "In Progress",
+        "ticket-3",
+        env,
+        HookResult(0, "In Progress\n", ""),
+        HookResult(0, DESCRIBE_VIEW, ""),
+        HookResult(0, "wait = 0\nwork = 0\n", ""),
+        case.count_old_result,
+        HookResult(0, "ticket-2\n", ""),
+        HookResult(0, "ticket-2\n", ""),
+        HookResult(0, "ticket-3\n", ""),
+        case.list_waiting_result,
+    )
+    result = run.result
+    # THEN
+    assert result.exception is None
+    actual: TicketOutcome = transition_outcome(result)
+    assert expected == actual
+    assert run.called_hooks.count("fake-list-waiting") == case.expected_list_calls
+    assert run.called_hooks.count("fake-system-move") == case.expected_system_move_calls
+
+
+class PullTransitionCase(NamedTuple):
+    case_name: str
+    ticket: str
+    to_state: str
+    old_state: str
+    pull_ticket: str
+    get_state_stdout: str
+    count_to_result: HookResult
+    count_old_result: HookResult
+    count_old_work_tickets: tuple[str, ...]
+    count_old_wait_tickets: tuple[str, ...]
+    list_waiting_result: HookResult
+    expected_system_move_calls: int
+
+
+def _pull_transition_case_id(case: PullTransitionCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        PullTransitionCase(
+            case_name="single_waiting_ticket",
+            ticket="ticket-2",
+            to_state="Done",
+            old_state="In Progress",
+            pull_ticket="ticket-3",
+            get_state_stdout="In Progress\n",
+            count_to_result=HookResult(0, "wait = 0\nwork = 0\n", ""),
+            count_old_result=HookResult(0, "wait = 1\nwork = 0\n", ""),
+            count_old_work_tickets=(),
+            count_old_wait_tickets=("ticket-3",),
+            list_waiting_result=HookResult(0, 'tickets = ["ticket-3"]\n', ""),
+            expected_system_move_calls=2,
+        ),
+        PullTransitionCase(
+            case_name="highest_priority_of_two_waiting_tickets",
+            ticket="ticket-2",
+            to_state="Done",
+            old_state="In Progress",
+            pull_ticket="ticket-3",
+            get_state_stdout="In Progress\n",
+            count_to_result=HookResult(0, "wait = 0\nwork = 0\n", ""),
+            count_old_result=HookResult(0, "wait = 2\nwork = 0\n", ""),
+            count_old_work_tickets=(),
+            count_old_wait_tickets=("ticket-3", "ticket-4"),
+            list_waiting_result=HookResult(
+                0, 'tickets = ["ticket-3", "ticket-4"]\n', ""
+            ),
+            expected_system_move_calls=2,
+        ),
+        PullTransitionCase(
+            case_name="after_event_9",
+            ticket="ticket-1",
+            to_state="In Progress",
+            old_state="Backlog",
+            pull_ticket="ticket-3",
+            get_state_stdout="Backlog\n",
+            count_to_result=HookResult(0, "wait = 1\nwork = 3\n", ""),
+            count_old_result=HookResult(0, "wait = 1\nwork = 2\n", ""),
+            count_old_work_tickets=("ticket-1", "ticket-3"),
+            count_old_wait_tickets=("ticket-3",),
+            list_waiting_result=HookResult(0, 'tickets = ["ticket-3"]\n', ""),
+            expected_system_move_calls=1,
+        ),
+    ],
+    ids=_pull_transition_case_id,
+)
+def test_transition_pull(
+    run_transition_pull: RunTransitionPull, case: PullTransitionCase
+) -> None:
+    # GIVEN
+    expected: TicketOutcome = {"exit_code": 0, "ticket_id": case.ticket}
+    # WHEN
+    env = dict(os.environ)
+    env["GET_STATE_HOOK"] = "fake-get-state"
+    env["DESCRIBE_HOOK"] = "fake-describe"
+    env["COUNT_HOOK"] = "fake-count"
+    env["TRANSITION_HOOK"] = "fake-transition"
+    env["SYSTEM_MOVE_HOOK"] = "fake-system-move"
+    env["LIST_WAITING_HOOK"] = "fake-list-waiting"
+    run = run_transition_pull(
+        case.ticket,
+        case.to_state,
+        "token-1",
+        case.old_state,
+        case.pull_ticket,
+        env,
+        HookResult(0, case.get_state_stdout, ""),
+        HookResult(0, DESCRIBE_VIEW, ""),
+        case.count_to_result,
+        case.count_old_result,
+        HookResult(0, f"{case.ticket}\n", ""),
+        HookResult(0, f"{case.ticket}\n", ""),
+        HookResult(0, f"{case.pull_ticket}\n", ""),
+        case.list_waiting_result,
+    )
+    result = run.result
+    # THEN
+    assert result.exception is None
+    actual: TicketOutcome = transition_outcome(result)
+    assert expected == actual
+    assert case.count_old_result.stdout == (
+        f"wait = {len(case.count_old_wait_tickets)}\n"
+        f"work = {len(case.count_old_work_tickets)}\n"
+    )
+    assert run.called_hooks.count("fake-list-waiting") == 1
+    assert run.called_hooks.count("fake-system-move") == case.expected_system_move_calls
+    assert run.called_hooks.count("fake-get-state") == 1
+    assert run.called_hooks.count("fake-transition") == 1
+    assert run.called_hooks.count("fake-count") == 2
+    assert run.called_hooks.count("fake-describe") == 1
+
+
+class PullSystemMoveFailureCase(NamedTuple):
+    case_name: str
+    pull_system_move_result: HookResult
+    expected_exit_code: int
+    expected_output: str
+
+
+def _pull_system_move_failure_case_id(case: PullSystemMoveFailureCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        PullSystemMoveFailureCase(
+            case_name="failing_hook",
+            pull_system_move_result=HookResult(3, "", ""),
+            expected_exit_code=3,
+            expected_output="",
+        ),
+        PullSystemMoveFailureCase(
+            case_name="empty_ticket_id",
+            pull_system_move_result=HookResult(0, "", ""),
+            expected_exit_code=2,
+            expected_output="system move hook returned no ticket id\n",
+        ),
+    ],
+    ids=_pull_system_move_failure_case_id,
+)
+def test_transition_pull_system_move_failure(
+    run_transition_pull: RunTransitionPull, case: PullSystemMoveFailureCase
+) -> None:
+    # GIVEN
+    expected: TicketOutcome = {"exit_code": case.expected_exit_code, "ticket_id": None}
+    # WHEN
+    env = dict(os.environ)
+    env["GET_STATE_HOOK"] = "fake-get-state"
+    env["DESCRIBE_HOOK"] = "fake-describe"
+    env["COUNT_HOOK"] = "fake-count"
+    env["TRANSITION_HOOK"] = "fake-transition"
+    env["SYSTEM_MOVE_HOOK"] = "fake-system-move"
+    env["LIST_WAITING_HOOK"] = "fake-list-waiting"
+    run = run_transition_pull(
+        "ticket-2",
+        "Done",
+        "token-1",
+        "In Progress",
+        "ticket-3",
+        env,
+        HookResult(0, "In Progress\n", ""),
+        HookResult(0, DESCRIBE_VIEW, ""),
+        HookResult(0, "wait = 0\nwork = 0\n", ""),
+        HookResult(0, "wait = 1\nwork = 0\n", ""),
+        HookResult(0, "ticket-2\n", ""),
+        HookResult(0, "ticket-2\n", ""),
+        case.pull_system_move_result,
+        HookResult(0, 'tickets = ["ticket-3"]\n', ""),
+    )
+    result = run.result
+    # THEN
+    actual: TicketOutcome = transition_outcome(result)
+    assert expected == actual
+    assert result.output == case.expected_output
+    assert run.called_hooks.count("fake-list-waiting") == 1
+    assert run.called_hooks.count("fake-system-move") == 2
+
+
+def test_transition_pull_system_move_missing_hook_after_event_9(
+    run_transition_pull: RunTransitionPull,
+) -> None:
+    # GIVEN
+    expected: TicketOutcome = {"exit_code": 2, "ticket_id": None}
+    # WHEN
+    env = dict(os.environ)
+    env["GET_STATE_HOOK"] = "fake-get-state"
+    env["DESCRIBE_HOOK"] = "fake-describe"
+    env["COUNT_HOOK"] = "fake-count"
+    env["TRANSITION_HOOK"] = "fake-transition"
+    env.pop("SYSTEM_MOVE_HOOK", None)
+    env["LIST_WAITING_HOOK"] = "fake-list-waiting"
+    run = run_transition_pull(
+        "ticket-1",
+        "In Progress",
+        "token-1",
+        "Backlog",
+        "ticket-3",
+        env,
+        HookResult(0, "Backlog\n", ""),
+        HookResult(0, DESCRIBE_VIEW, ""),
+        HookResult(0, "wait = 1\nwork = 3\n", ""),
+        # Backlog after Event 9: work is ticket-1, still in
+        # Backlog waiting for In Progress, and ticket-3, in
+        # Backlog waiting for Backlog; wait is ticket-3.
+        HookResult(0, "wait = 1\nwork = 2\n", ""),
+        HookResult(0, "ticket-1\n", ""),
+        HookResult(0, "ticket-1\n", ""),
+        HookResult(0, "ticket-3\n", ""),
+        HookResult(0, 'tickets = ["ticket-3"]\n', ""),
+    )
+    result = run.result
+    # THEN
+    actual: TicketOutcome = transition_outcome(result)
+    assert expected == actual
+    assert result.output == "SYSTEM_MOVE_HOOK is not set\n"
+    assert run.called_hooks.count("fake-list-waiting") == 1
+    assert "fake-system-move" not in run.called_hooks

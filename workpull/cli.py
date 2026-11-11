@@ -388,6 +388,7 @@ class TransitionCheck(NamedTuple):
     allowed: bool
     view: dict[str, Any]
     work_count: int
+    current_state: str
 
 
 def _fetch_counts(to_state: str, run_hook_fn: RunHook) -> StateCounts:
@@ -414,7 +415,9 @@ def _check_transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> Trans
     current_state = _fetch_current_state(ticket, run_hook_fn)
     view = _fetch_describe_view(run_hook_fn)
     if to_state not in view["wip_limits"]:
-        return TransitionCheck(allowed=False, view=view, work_count=0)
+        return TransitionCheck(
+            allowed=False, view=view, work_count=0, current_state=current_state
+        )
     counts = _fetch_counts(to_state, run_hook_fn)
     reachable = view["transitions"].get(current_state) == to_state
     wait_limit = view["wip_limits"][to_state]["wait"]
@@ -422,6 +425,7 @@ def _check_transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> Trans
         allowed=reachable and counts.wait < wait_limit,
         view=view,
         work_count=counts.work,
+        current_state=current_state,
     )
 
 
@@ -451,6 +455,65 @@ def _move_ticket_immediately_if_capacity(
         if not result.stdout.strip():
             click.echo("system move hook returned no ticket id", err=True)
             raise click.exceptions.Exit(2)
+
+
+def validate_list_waiting(waiting: dict[str, Any]) -> str | None:
+    """Validate a parsed list-waiting document. Returns an error string or None.
+
+    Contract, for hook authors: exactly tickets, a list of
+    non-empty strings, in priority order, first is highest.
+    The document is always a dict: tomllib.loads returns a
+    dict for every input, so no non-dict check is needed.
+    """
+    if (
+        set(waiting) != {"tickets"}
+        or not isinstance(waiting["tickets"], list)
+        or any(
+            not isinstance(ticket, str) or not ticket
+            for ticket in waiting["tickets"]
+        )
+    ):
+        return "invalid list-waiting output: expected tickets"
+    return None
+
+
+def _fetch_waiting_tickets(state: str, run_hook_fn: RunHook) -> list[str]:
+    # Caller guarantees LIST_WAITING_HOOK is set: an unset
+    # hook means Event 10 is not configured, and the pull
+    # is skipped before this is called.
+    hook = os.environ["LIST_WAITING_HOOK"]
+    result = run_hook_fn(hook, {"WORKPULL_STATE": state})
+    if result.returncode != 0:
+        raise click.exceptions.Exit(result.returncode)
+    try:
+        waiting = tomllib.loads(result.stdout)
+    except tomllib.TOMLDecodeError as exc:
+        click.echo(f"list-waiting hook output is not valid TOML: {exc}", err=True)
+        raise click.exceptions.Exit(2)
+    error = validate_list_waiting(waiting)
+    if error:
+        click.echo(error, err=True)
+        raise click.exceptions.Exit(2)
+    return waiting["tickets"]
+
+
+def _pull_one_waiting_ticket_into_opened_slot(
+    old_state: str, view: dict[str, Any], run_hook_fn: RunHook
+) -> None:
+    # No list hook means no pull is attempted, so a transition
+    # without Event 10 configured keeps its old behaviour.
+    if not os.environ.get("LIST_WAITING_HOOK"):
+        return
+    counts = _fetch_counts(old_state, run_hook_fn)
+    work_limit = view["wip_limits"][old_state]["work"]
+    if not counts.work < work_limit:
+        return
+    waiting = _fetch_waiting_tickets(old_state, run_hook_fn)
+    if not waiting:
+        return
+    _move_ticket_immediately_if_capacity(
+        waiting[0], old_state, counts.work, work_limit, run_hook_fn
+    )
 
 
 def transition(ticket: str, to_state: str, token: str, run_hook_fn: RunHook) -> None:
@@ -483,6 +546,9 @@ def transition(ticket: str, to_state: str, token: str, run_hook_fn: RunHook) -> 
         check.work_count,
         check.view["wip_limits"][to_state]["work"],
         run_hook_fn,
+    )
+    _pull_one_waiting_ticket_into_opened_slot(
+        check.current_state, check.view, run_hook_fn
     )
     click.echo(ticket_id)
 
