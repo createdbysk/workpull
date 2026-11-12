@@ -11,7 +11,16 @@ requires-python = ">=3.12,<3.13"
 dependencies = ["click>=8.1,<9"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<9", "pymarkdownlnt>=0.9.41", "pyrefly>=1.4,<2"]
+dev = ["pytest>=8,<9", "pymarkdownlnt>=0.9.41", "pyrefly>=1.4,<2", "ruff>=0.17.4,<0.18"]
 
 [tool.setuptools.packages.find]
 include = ["workpull*"]
+
+# Preview is on because E302, E303, and W391 only take effect
+# as preview rules in Ruff 0.17; the select list keeps every
+# other rule, stable or preview, out of the lint.
+[tool.ruff]
+preview = true
+
+[tool.ruff.lint]
+select = ["E302", "E303", "W391", "W292"]

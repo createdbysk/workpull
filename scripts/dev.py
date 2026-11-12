@@ -29,6 +29,7 @@ LINT_FILES = [
     "design/",
     "implementation/",
 ]
+PYTHON_FILES = ["workpull", "tests", "scripts", "adapters", "plugins"]
 
 
 def venv_python() -> Path:
@@ -102,9 +103,7 @@ def cmd_type(_args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    return run(
-        [pyrefly, "check", "workpull", "tests", "scripts", "adapters", "plugins"]
-    )
+    return run([pyrefly, "check", *PYTHON_FILES])
 
 
 def cmd_lint(_args: argparse.Namespace) -> int:
@@ -121,7 +120,24 @@ def cmd_lint(_args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    return run([pymarkdown, "--config", ".pymarkdown.json", "scan", *LINT_FILES])
+    ruff = shutil.which("ruff")
+    if not ruff:
+        for name in ("ruff", "ruff.exe"):
+            venv_ruff = venv_python().parent / name
+            if venv_ruff.exists():
+                ruff = str(venv_ruff)
+                break
+    if not ruff:
+        print(
+            "error: ruff not found. Run: python scripts/dev.py setup",
+            file=sys.stderr,
+        )
+        return 1
+    markdown_code = run(
+        [pymarkdown, "--config", ".pymarkdown.json", "scan", *LINT_FILES]
+    )
+    ruff_code = run([ruff, "check", "--output-format", "concise", *PYTHON_FILES])
+    return 1 if markdown_code or ruff_code else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -130,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("setup", help="Create .venv and install dev deps.")
     sub.add_parser("install", help="Install, only inside an activated venv.")
     sub.add_parser("test", help="Run pytest.")
-    sub.add_parser("lint", help="Run pymarkdown on docs.")
+    sub.add_parser("lint", help="Run pymarkdown on docs and Ruff on Python.")
     sub.add_parser("type", help="Run pyrefly type check.")
     args = parser.parse_args(argv)
     commands = {

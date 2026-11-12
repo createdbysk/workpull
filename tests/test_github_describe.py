@@ -86,6 +86,7 @@ def test_cli_via_github_adapter(run_cli: RunCli) -> None:
     }
     assert expected == actual
 
+
 def test_adapter_direct_output_is_exact() -> None:
     # GIVEN
     expected: Outcome = {
@@ -108,5 +109,3 @@ def test_adapter_direct_output_is_exact() -> None:
         "output_contains": "Backlog" in result.stdout,
     }
     assert expected == actual
-
-
