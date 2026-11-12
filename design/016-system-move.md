@@ -48,8 +48,8 @@
   pulls from that state's wait, highest priority
   first, one per open slot. That move opens a slot
   in the upstream state, which pulls from its wait
-  once more. Two steps only, in this step; see
-  "Event 10: Two-step cascade".
+  once more, and so on, one state at a time; see
+  "Event 10: N-step cascade".
 - The chain runs backwards, one state at a time,
   and stops at Backlog, the first state. It never
   runs forward, from a state into its next state
@@ -65,9 +65,9 @@
   exactly one waiting ticket into the opened slot,
   and stopped there. No recursion, no loop over
   upstream states, no second pull in the same
-  command. The two-step cascade, in the next
-  section, builds on this single step and is the
-  current behaviour.
+  command. The N-step cascade, in the next section,
+  builds on this single step and is the current
+  behaviour.
 - That pull is a second system move, in the same
   transition command, after Event 8. It uses
   `LIST_WAITING_HOOK` to find the waiting ticket
@@ -91,7 +91,7 @@
   pull checks capacity again and skips the list
   when there is none.
 
-## Event 10: Two-step cascade
+## Event 10: N-step cascade
 
 - The cascade is triggered by the move itself,
   not by a re-fetched count. When a pull moves a
@@ -99,7 +99,10 @@
   triggers the next pull, from the wait of the
   state the pulled ticket left, one step backwards
   toward Backlog. The fresh count at pull time is
-  only the gate, not the trigger.
+  only the gate, not the trigger. The cascade keeps
+  stepping backwards while each pull moves a
+  ticket: N steps, one per state in the chain, not
+  a fixed number of steps.
 - "The state the pulled ticket left" is derived
   from describe transitions, not from any hook:
   the state whose transition target is the pulled
@@ -130,23 +133,35 @@
   another actor between the move and the pull can
   close it, so the gate stays.
 - A cascade failure leaves earlier moves applied. If
-  the second pull fails — a hook exits non-zero,
+  a later pull fails — a hook exits non-zero,
   returns invalid TOML, or returns no ticket id —
   or stops at its capacity gate, the transition
-  and the first pull stand; nothing is rolled back.
-  The CLI exits with the failing hook's code on a
-  failure, and 0 when the second pull stops at the
+  and the earlier pulls stand; nothing is rolled
+  back. The CLI exits with the failing hook's code
+  on a failure, and 0 when a pull stops at the
   gate, and prints no ticket id on a failure.
-- Two steps only, in this step: the first pull into
-  the opened slot, and the second pull into the
-  state the first pulled ticket left. No third pull,
-  no generalization to N steps yet.
-- The two-step cascade test uses a chained
-  four-state describe view, Backlog -> In Progress
-  -> In Work -> Done, not an artificial mock state.
-  The current describe view is not chained, In
-  Progress goes straight to Done and In Work is
-  isolated, so the two-step test needs its own view.
+- The cascade stops in two ways. It stops at a
+  pull that does not move a ticket, because the
+  state's waiting list is empty or its capacity
+  gate is closed. It also stops after a pull
+  succeeds, when the state the pull filled has no
+  predecessor. It does not skip a stopped state
+  and continue further back.
+- The chain always terminates. A predecessor is
+  always earlier in the states list, because
+  describe only allows a transition to a later
+  state, so transitions cannot form a cycle and
+  the chain cannot revisit a state; it has at most
+  as many steps as there are states. Each step
+  also moves one waiting ticket out of wait, so
+  the waiting tickets bound the steps as well.
+- The cascade tests use chained describe views,
+  Backlog -> In Progress -> In Work -> Done for
+  three steps and a five-state chain for four
+  steps, not artificial mock states. The current
+  describe view is not chained, In Progress goes
+  straight to Done and In Work is isolated, so the
+  cascade tests need their own views.
 
 ## Who moves
 
@@ -248,8 +263,7 @@
   ticket onward, state to state, all the way to
   Done, in one command. The pull chain runs
   backwards, toward Backlog, and stops there.
-- Event 10 two-step cascade is this step: two pulls,
-  the first into the opened slot and the second into
-  the state the first pulled ticket left, no third
-  pull. Generalization to N steps is a later step,
-  not this one.
+- No unbounded cascade. The chain runs only over
+  predecessor states of states a pull filled, and
+  stops at the first pull that does not move a
+  ticket.

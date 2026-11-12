@@ -60,7 +60,7 @@
   transition unit tests: Backlog, In Progress, In
   Work, Done, with Backlog to In Progress, In
   Progress to Done, and the same WIP limits. The
-  two-step cascade test uses its own chained view
+  cascade tests use their own chained view
   instead: Backlog to In Progress, In Progress to
   In Work, In Work to Done, with the same WIP
   limits. `write_mock_backend_with_describe` takes
@@ -197,8 +197,9 @@
   with no token, and ticket-4 still in Backlog,
   waiting for In Progress, priority and token
   unchanged. The pull takes the highest-priority
-  waiting ticket only, and stops there: one step,
-  no cascade.
+  waiting ticket, and the cascade steps back to
+  Backlog and stops there: no ticket waits for
+  Backlog, so its waiting list is empty.
 - A second case covers the same transition with
   `LIST_WAITING_HOOK` unset: it succeeds, and the
   waiting ticket stays waiting, because Event 10
@@ -268,7 +269,7 @@
   sharing WHEN and THEN with Scenarios 1 and 2 and
   differing only in GIVEN.
 
-## Scenario 10: two-step cascade, Event 10
+## Scenario 10: three-step cascade, Event 10
 
 - Initial state, under the chained view: ticket-1
   in Backlog, priority a0, unclaimed; ticket-2 in
@@ -281,9 +282,10 @@
   does: a ticket waiting for Backlog cannot arise
   through transition, because no transition targets
   Backlog, and it waits for the state it is already
-  in. It is there so the test can tell two steps
-  from N steps: a third pull would move it, and
-  two steps leave it waiting.
+  in. It is there so the test can tell a capped
+  cascade from N steps: the third pull moves it,
+  and a cascade capped at two steps leaves it
+  waiting.
 - Commands, through the CLI runner: claim-ticket
   In Work, then transition ticket-2 to Done with
   the token the claim returned.
@@ -292,16 +294,17 @@
   In Progress, and get-state ticket-2 is Done;
   count In Work is wait 0, work 1, count
   In Progress is wait 0, work 1, count Done is
-  wait 0, work 1, and count Backlog is wait 1,
+  wait 0, work 1, and count Backlog is wait 0,
   work 2; the state file has ticket-3 in
-  In Work, ticket-4 in In Progress, and ticket-2
-  in Done, each waiting for nothing, with no token,
-  and ticket-5 still in Backlog, waiting for
-  Backlog, with no token.
+  In Work, ticket-4 in In Progress, ticket-5 in
+  Backlog, and ticket-2 in Done, each waiting for
+  nothing, with no token.
   The first pull moves ticket-3 into In Work, and
   that move triggers the second pull, ticket-4 into
-  In Progress, one step backwards toward Backlog.
-  No third pull happens in this step.
+  In Progress, and that move triggers the third
+  pull, ticket-5 into Backlog, one step backwards
+  at a time toward Backlog. Backlog has no
+  predecessor, so the cascade stops there.
 
 ## Scenario 11: cascade stops at the second pull's capacity gate, Event 10
 
@@ -346,8 +349,8 @@
 ## What it does not do
 
 - No new production code, and no new command.
-- Event 10 two-step cascade is in the mock: two
-  pulls, no third pull, no generalization to N
-  steps yet, and there is no `pull` command yet.
+- Event 10 N-step cascade is in the mock: the
+  chain pulls backwards while each pull moves a
+  ticket, and there is no `pull` command yet.
 - No release in the mock yet.
 - No real backend. The mock is test support only.

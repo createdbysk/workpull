@@ -517,6 +517,28 @@ def _pull_one_waiting_ticket_into_opened_slot(
     return waiting[0]
 
 
+def _pull_waiting_tickets_backwards(
+    filled_state: str, view: dict[str, Any], run_hook_fn: RunHook
+) -> None:
+    # The loop cannot run away: a predecessor is always
+    # earlier in the states list, because describe only
+    # allows a transition to a later state, so the walk
+    # never revisits a state and ends at the first state.
+    # Each step also moves one waiting ticket out of wait,
+    # so the waiting tickets bound the steps too.
+    state = filled_state
+    while True:
+        pulled_ticket = _pull_one_waiting_ticket_into_opened_slot(
+            state, view, run_hook_fn
+        )
+        if pulled_ticket is None:
+            return
+        predecessor = _predecessor_state(state, view)
+        if predecessor is None:
+            return
+        state = predecessor
+
+
 def _predecessor_state(state: str, view: dict[str, Any]) -> str | None:
     # First predecessor in states order: two states can
     # transition to the same target, and the choice is
@@ -558,16 +580,7 @@ def transition(ticket: str, to_state: str, token: str, run_hook_fn: RunHook) -> 
         check.view["wip_limits"][to_state]["work"],
         run_hook_fn,
     )
-    pulled_ticket = _pull_one_waiting_ticket_into_opened_slot(
-        check.current_state, check.view, run_hook_fn
-    )
-    # Two steps only: the second pull is into the state the
-    # first pulled ticket left, and then the cascade stops.
-    # No third pull, no generalization to N steps yet.
-    if pulled_ticket is not None:
-        predecessor = _predecessor_state(check.current_state, check.view)
-        if predecessor is not None:
-            _pull_one_waiting_ticket_into_opened_slot(predecessor, check.view, run_hook_fn)
+    _pull_waiting_tickets_backwards(check.current_state, check.view, run_hook_fn)
     click.echo(ticket_id)
 
 

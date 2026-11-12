@@ -202,9 +202,9 @@ def write_mock_backend_with_describe(
 
     The script and state live in the isolated filesystem, so
     the mock backend is test support, not a real backend.
-    The describe view is passed explicitly: the two-step
-    cascade test needs the chained view, the other tests
-    need the default view.
+    The describe view is passed explicitly: the cascade
+    tests need the chained view, the other tests need
+    the default view.
     """
     Path("mock_backend.py").write_text(
         _MOCK_BACKEND_SCRIPT.replace("__DESCRIBE_VIEW__", repr(describe_view))
@@ -243,7 +243,6 @@ def write_mock_backend(
     return write_mock_backend_with_describe(
         hook_command, initial_state, DESCRIBE_VIEW
     )
-
 
 
 class MockBackendEnvRejectionCase(NamedTuple):
@@ -483,7 +482,6 @@ def read_mock_backend_state() -> MockBackendState:
             for ticket in raw["tickets"]
         )
     )
-
 
 
 def test_component_count_of_waiting_ticket_counts_work_in_left_state(
@@ -727,7 +725,6 @@ def test_component_transition_with_another_ticket_token_does_not_move(
     )
 
 
-
 def test_component_get_state_of_waiting_ticket_returns_waiting_for_state(
     runner: CliRunner,
     isolated_filesystem: IsolatedFilesystem,
@@ -754,7 +751,6 @@ def test_component_get_state_of_waiting_ticket_returns_waiting_for_state(
     # THEN
     assert result.exception is None
     assert result.output.strip() == "In Progress"
-
 
 
 def _component_transition_case_id(case: ComponentTransitionCase) -> str:
@@ -1176,7 +1172,8 @@ def test_component_transition_pull(
     assert done_count.output.strip() == "wait = 0\nwork = 1"
     assert state == case.expected_final_state
 
-def test_component_transition_two_step_cascade_pulls_backwards(
+
+def test_component_transition_three_step_cascade_pulls_backwards(
     runner: CliRunner,
     isolated_filesystem: IsolatedFilesystem,
     hook_command: HookCommand,
@@ -1270,7 +1267,7 @@ def test_component_transition_two_step_cascade_pulls_backwards(
     assert done_count.exception is None
     assert done_count.output.strip() == "wait = 0\nwork = 1"
     assert backlog_count.exception is None
-    assert backlog_count.output.strip() == "wait = 1\nwork = 2"
+    assert backlog_count.output.strip() == "wait = 0\nwork = 2"
     assert state == MockBackendState(
         tickets=(
             MockBackendTicket(
@@ -1306,10 +1303,11 @@ def test_component_transition_two_step_cascade_pulls_backwards(
                 state="Backlog",
                 priority="a1",
                 token=None,
-                waiting_for="Backlog",
+                waiting_for=None,
             ),
         )
     )
+
 
 def test_component_transition_cascade_second_pull_at_limit_leaves_first_pull_applied(
     runner: CliRunner,
