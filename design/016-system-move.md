@@ -47,25 +47,27 @@
 - When a slot opens in a downstream state, the system
   pulls from that state's wait, highest priority
   first, one per open slot. That move opens a slot
-  in the upstream state, which pulls from its wait,
-  and so on backwards toward Backlog.
+  in the upstream state, which pulls from its wait
+  once more. Two steps only, in this step; see
+  "Event 10: Two-step cascade".
 - The chain runs backwards, one state at a time,
   and stops at Backlog, the first state. It never
   runs forward, from a state into its next state
   and onward to Done.
 
-## Event 10: Slot Opened in Next State, single step only
+## Event 10: Slot Opened in Next State, single step (previous step)
 
 - The ticket moving out of its old state opens a
   slot there. Workpull checks the old state's wait
   queue, and pulls the highest priority waiting
   ticket into it, one per open slot.
-- Single step only, in this step: the pull moves
+- Single step was the previous step: the pull moved
   exactly one waiting ticket into the opened slot,
-  and stops there. No recursion, no loop over
+  and stopped there. No recursion, no loop over
   upstream states, no second pull in the same
-  command. The future two-step cascade test stays
-  red until the cascade is implemented.
+  command. The two-step cascade, in the next
+  section, builds on this single step and is the
+  current behaviour.
 - That pull is a second system move, in the same
   transition command, after Event 8. It uses
   `LIST_WAITING_HOOK` to find the waiting ticket
@@ -88,34 +90,28 @@
   leave the old state at its work limit, so the
   pull checks capacity again and skips the list
   when there is none.
-- The two-step cascade, where the pulled ticket
-  leaving its wait opens a slot upstream, which
-  pulls from its wait, and so on backwards toward
-  Backlog, is a later step, not this one.
 
-## Cascade trigger — next step, not current behaviour
+## Event 10: Two-step cascade
 
-- This section decides the next step, the two-step
-  cascade. Nothing here is implemented yet.
-- The cascade will be triggered by the move itself,
+- The cascade is triggered by the move itself,
   not by a re-fetched count. When a pull moves a
   ticket out of its wait into a state, that move
-  will trigger the next pull, from the wait of the
+  triggers the next pull, from the wait of the
   state the pulled ticket left, one step backwards
-  at a time toward Backlog. The fresh count at pull
-  time will be only the gate, not the trigger.
-- "The state the pulled ticket left" will be
-  derived from describe transitions, not from any
-  hook: the state whose transition target is the
-  pulled ticket's new state, the state before it.
-  No hook returns that value, so Workpull will
-  derive it from describe.
+  toward Backlog. The fresh count at pull time is
+  only the gate, not the trigger.
+- "The state the pulled ticket left" is derived
+  from describe transitions, not from any hook:
+  the state whose transition target is the pulled
+  ticket's new state, the state before it. No hook
+  returns that value, so Workpull derives it from
+  describe.
 - That derivation assumes one predecessor per
   target. Two states can transition to the same
   target, which makes the predecessor ambiguous,
-  and in that case Workpull will pull from the
-  first predecessor in describe order. That choice
-  is documented here, not hidden in the code.
+  and in that case Workpull pulls from the first
+  predecessor in the states list. That choice is
+  documented here, not hidden in the code.
 - A waiting ticket occupies a work slot in the state
   it left, so pulling it out of wait opens a work
   slot there. Count's work is tickets whose work
@@ -123,17 +119,29 @@
   and wait is tickets waiting for that state. A
   waiting ticket counts as work in the state it
   left and as wait in the state it waits for.
-- Each cascade step will pull exactly one ticket, the
+- Each cascade step pulls exactly one ticket, the
   highest priority waiting ticket for the state it
   pulls into, one per open slot. A move opens
   exactly one slot, so a step pulls one ticket.
-- Each cascade step will be gated by a capacity
+- Each cascade step is gated by a capacity
   re-check in the state it pulls into, a fresh count
   at pull time. The move just opened one slot there,
   so the gate normally passes, but a slot filled by
   another actor between the move and the pull can
   close it, so the gate stays.
-- The two-step cascade test will use a chained
+- A cascade failure leaves earlier moves applied. If
+  the second pull fails — a hook exits non-zero,
+  returns invalid TOML, or returns no ticket id —
+  or stops at its capacity gate, the transition
+  and the first pull stand; nothing is rolled back.
+  The CLI exits with the failing hook's code on a
+  failure, and 0 when the second pull stops at the
+  gate, and prints no ticket id on a failure.
+- Two steps only, in this step: the first pull into
+  the opened slot, and the second pull into the
+  state the first pulled ticket left. No third pull,
+  no generalization to N steps yet.
+- The two-step cascade test uses a chained
   four-state describe view, Backlog -> In Progress
   -> In Work -> Done, not an artificial mock state.
   The current describe view is not chained, In
@@ -240,7 +248,8 @@
   ticket onward, state to state, all the way to
   Done, in one command. The pull chain runs
   backwards, toward Backlog, and stops there.
-- Event 10 single step is this step: one waiting
-  ticket pulled into the opened slot, no recursion,
-  no loop over upstream states. The two-step
-  cascade is a later step, not this one.
+- Event 10 two-step cascade is this step: two pulls,
+  the first into the opened slot and the second into
+  the state the first pulled ticket left, no third
+  pull. Generalization to N steps is a later step,
+  not this one.

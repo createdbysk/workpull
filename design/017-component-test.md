@@ -59,7 +59,13 @@
 - The mock's describe is the same view as the
   transition unit tests: Backlog, In Progress, In
   Work, Done, with Backlog to In Progress, In
-  Progress to Done, and the same WIP limits.
+  Progress to Done, and the same WIP limits. The
+  two-step cascade test uses its own chained view
+  instead: Backlog to In Progress, In Progress to
+  In Work, In Work to Done, with the same WIP
+  limits. `write_mock_backend_with_describe` takes
+  the view explicitly; `write_mock_backend` is the
+  same helper with the default view.
 
 ## Hooks
 
@@ -262,6 +268,70 @@
   sharing WHEN and THEN with Scenarios 1 and 2 and
   differing only in GIVEN.
 
+## Scenario 10: two-step cascade, Event 10
+
+- Initial state, under the chained view: ticket-1
+  in Backlog, priority a0, unclaimed; ticket-2 in
+  In Work, priority a0, unclaimed; ticket-3 in
+  In Progress, priority a0, unclaimed, waiting for
+  In Work; ticket-4 in Backlog, priority a0,
+  unclaimed, waiting for In Progress; ticket-5 in
+  Backlog, priority a1, unclaimed, waiting for
+  Backlog. Ticket-5 is artificial, as Scenario 8
+  does: a ticket waiting for Backlog cannot arise
+  through transition, because no transition targets
+  Backlog, and it waits for the state it is already
+  in. It is there so the test can tell two steps
+  from N steps: a third pull would move it, and
+  two steps leave it waiting.
+- Commands, through the CLI runner: claim-ticket
+  In Work, then transition ticket-2 to Done with
+  the token the claim returned.
+- Final state, asserted three ways: get-state
+  ticket-3 is In Work, get-state ticket-4 is
+  In Progress, and get-state ticket-2 is Done;
+  count In Work is wait 0, work 1, count
+  In Progress is wait 0, work 1, count Done is
+  wait 0, work 1, and count Backlog is wait 1,
+  work 2; the state file has ticket-3 in
+  In Work, ticket-4 in In Progress, and ticket-2
+  in Done, each waiting for nothing, with no token,
+  and ticket-5 still in Backlog, waiting for
+  Backlog, with no token.
+  The first pull moves ticket-3 into In Work, and
+  that move triggers the second pull, ticket-4 into
+  In Progress, one step backwards toward Backlog.
+  No third pull happens in this step.
+
+## Scenario 11: cascade stops at the second pull's capacity gate, Event 10
+
+- Initial state, under the chained view: ticket-1
+  in Backlog, priority a0, unclaimed; ticket-2 in
+  In Work, priority a0, unclaimed; ticket-3 in
+  In Progress, priority a0, unclaimed, waiting for
+  In Work; ticket-4 in Backlog, priority a0,
+  unclaimed, waiting for In Progress; ticket-6,
+  ticket-7, and ticket-8 in In Progress, priorities
+  a0, a1, and a2, unclaimed, so In Progress work
+  is 3 of 3.
+- Commands, through the CLI runner: claim-ticket
+  In Work, then transition ticket-2 to Done with
+  the token the claim returned.
+- Final state, asserted three ways: get-state
+  ticket-3 is In Work, get-state ticket-4 is
+  In Progress, and get-state ticket-2 is Done;
+  count In Work is wait 0, work 1, count
+  In Progress is wait 1, work 3, and count Done
+  is wait 0, work 1; the state file has ticket-3
+  in In Work, ticket-4 still in Backlog, waiting
+  for In Progress, and ticket-2 in Done, each
+  waiting for nothing except ticket-4, with no
+  token. The transition and the first pull stand
+  even though the second pull did not happen:
+  a cascade failure, or a stop at the second
+  pull's capacity gate, leaves earlier moves
+  applied, nothing is rolled back.
+
 ## Visual board
 
 - A read-only board over the mock backend state file
@@ -276,9 +346,8 @@
 ## What it does not do
 
 - No new production code, and no new command.
-- Event 10 single step is in the mock: one waiting
-  ticket pulled into the opened slot, no cascade.
-  The two-step cascade is a later step, not this
-  one, and there is no `pull` command yet.
+- Event 10 two-step cascade is in the mock: two
+  pulls, no third pull, no generalization to N
+  steps yet, and there is no `pull` command yet.
 - No release in the mock yet.
 - No real backend. The mock is test support only.

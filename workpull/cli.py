@@ -499,21 +499,32 @@ def _fetch_waiting_tickets(state: str, run_hook_fn: RunHook) -> list[str]:
 
 def _pull_one_waiting_ticket_into_opened_slot(
     old_state: str, view: dict[str, Any], run_hook_fn: RunHook
-) -> None:
+) -> str | None:
     # No list hook means no pull is attempted, so a transition
     # without Event 10 configured keeps its old behaviour.
     if not os.environ.get("LIST_WAITING_HOOK"):
-        return
+        return None
     counts = _fetch_counts(old_state, run_hook_fn)
     work_limit = view["wip_limits"][old_state]["work"]
     if not counts.work < work_limit:
-        return
+        return None
     waiting = _fetch_waiting_tickets(old_state, run_hook_fn)
     if not waiting:
-        return
+        return None
     _move_ticket_immediately_if_capacity(
         waiting[0], old_state, counts.work, work_limit, run_hook_fn
     )
+    return waiting[0]
+
+
+def _predecessor_state(state: str, view: dict[str, Any]) -> str | None:
+    # First predecessor in states order: two states can
+    # transition to the same target, and the choice is
+    # documented in design 016, not hidden in the code.
+    for source in view["states"]:
+        if view["transitions"].get(source) == state:
+            return source
+    return None
 
 
 def transition(ticket: str, to_state: str, token: str, run_hook_fn: RunHook) -> None:
@@ -547,9 +558,16 @@ def transition(ticket: str, to_state: str, token: str, run_hook_fn: RunHook) -> 
         check.view["wip_limits"][to_state]["work"],
         run_hook_fn,
     )
-    _pull_one_waiting_ticket_into_opened_slot(
+    pulled_ticket = _pull_one_waiting_ticket_into_opened_slot(
         check.current_state, check.view, run_hook_fn
     )
+    # Two steps only: the second pull is into the state the
+    # first pulled ticket left, and then the cascade stops.
+    # No third pull, no generalization to N steps yet.
+    if pulled_ticket is not None:
+        predecessor = _predecessor_state(check.current_state, check.view)
+        if predecessor is not None:
+            _pull_one_waiting_ticket_into_opened_slot(predecessor, check.view, run_hook_fn)
     click.echo(ticket_id)
 
 

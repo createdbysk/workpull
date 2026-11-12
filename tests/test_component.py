@@ -70,6 +70,20 @@ Backlog = {work = inf, wait = 3}
 Done = {work = inf, wait = inf}
 """
 
+CHAINED_DESCRIBE_VIEW = """states = ["Backlog", "In Progress", "In Work", "Done"]
+
+[transitions]
+Backlog = "In Progress"
+"In Progress" = "In Work"
+"In Work" = "Done"
+
+[wip_limits]
+Backlog = {work = inf, wait = 3}
+"In Progress" = {work = 3, wait = 2}
+"In Work" = {work = 3, wait = 2}
+Done = {work = inf, wait = inf}
+"""
+
 _MOCK_BACKEND_SCRIPT = r"""import json
 import os
 import sys
@@ -181,16 +195,19 @@ main()
 """
 
 
-def write_mock_backend(
-    hook_command: HookCommand, initial_state: MockBackendState
+def write_mock_backend_with_describe(
+    hook_command: HookCommand, initial_state: MockBackendState, describe_view: str
 ) -> MockBackendHooks:
     """Write the mock backend script and its initial state file.
 
     The script and state live in the isolated filesystem, so
     the mock backend is test support, not a real backend.
+    The describe view is passed explicitly: the two-step
+    cascade test needs the chained view, the other tests
+    need the default view.
     """
     Path("mock_backend.py").write_text(
-        _MOCK_BACKEND_SCRIPT.replace("__DESCRIBE_VIEW__", repr(DESCRIBE_VIEW))
+        _MOCK_BACKEND_SCRIPT.replace("__DESCRIBE_VIEW__", repr(describe_view))
     )
     Path("mock_backend_state.json").write_text(
         json.dumps(
@@ -216,6 +233,15 @@ def write_mock_backend(
         transition=hook_command("mock_backend.py transition"),
         system_move=hook_command("mock_backend.py system-move"),
         list_waiting=hook_command("mock_backend.py list-waiting"),
+    )
+
+
+def write_mock_backend(
+    hook_command: HookCommand, initial_state: MockBackendState
+) -> MockBackendHooks:
+    """Write the mock backend script with the default describe view."""
+    return write_mock_backend_with_describe(
+        hook_command, initial_state, DESCRIBE_VIEW
     )
 
 
@@ -1149,3 +1175,298 @@ def test_component_transition_pull(
     assert done_count.exception is None
     assert done_count.output.strip() == "wait = 0\nwork = 1"
     assert state == case.expected_final_state
+
+def test_component_transition_two_step_cascade_pulls_backwards(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="In Work",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for="In Work",
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-4",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for="In Progress",
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-5",
+                state="Backlog",
+                priority="a1",
+                token=None,
+                waiting_for="Backlog",
+            ),
+        )
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend_with_describe(
+            hook_command, initial_state, CHAINED_DESCRIBE_VIEW
+        )
+        env = dict(os.environ)
+        env["DESCRIBE_HOOK"] = hooks.describe
+        env["COUNT_HOOK"] = hooks.count
+        env["GET_STATE_HOOK"] = hooks.get_state
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["TRANSITION_HOOK"] = hooks.transition
+        env["SYSTEM_MOVE_HOOK"] = hooks.system_move
+        env["LIST_WAITING_HOOK"] = hooks.list_waiting
+        claim = runner.invoke(cli, ["claim-ticket", "In Work"], env=env, obj={})
+        transition = runner.invoke(
+            cli, ["transition", "ticket-2", "Done", "token-ticket-2"], env=env, obj={}
+        )
+        first_pulled_state = runner.invoke(
+            cli, ["get-state", "ticket-3"], env=env, obj={}
+        )
+        second_pulled_state = runner.invoke(
+            cli, ["get-state", "ticket-4"], env=env, obj={}
+        )
+        moved_state = runner.invoke(cli, ["get-state", "ticket-2"], env=env, obj={})
+        in_work_count = runner.invoke(cli, ["count", "In Work"], env=env, obj={})
+        in_progress_count = runner.invoke(
+            cli, ["count", "In Progress"], env=env, obj={}
+        )
+        done_count = runner.invoke(cli, ["count", "Done"], env=env, obj={})
+        backlog_count = runner.invoke(cli, ["count", "Backlog"], env=env, obj={})
+        state = read_mock_backend_state()
+    # THEN
+    assert claim.exception is None
+    assert claim.output.strip() == 'ticket = "ticket-2"\ntoken = "token-ticket-2"'
+    assert transition.exception is None
+    assert transition.output.strip() == "ticket-2"
+    assert first_pulled_state.exception is None
+    assert first_pulled_state.output.strip() == "In Work"
+    assert second_pulled_state.exception is None
+    assert second_pulled_state.output.strip() == "In Progress"
+    assert moved_state.exception is None
+    assert moved_state.output.strip() == "Done"
+    assert in_work_count.exception is None
+    assert in_work_count.output.strip() == "wait = 0\nwork = 1"
+    assert in_progress_count.exception is None
+    assert in_progress_count.output.strip() == "wait = 0\nwork = 1"
+    assert done_count.exception is None
+    assert done_count.output.strip() == "wait = 0\nwork = 1"
+    assert backlog_count.exception is None
+    assert backlog_count.output.strip() == "wait = 1\nwork = 2"
+    assert state == MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Done",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="In Work",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-4",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-5",
+                state="Backlog",
+                priority="a1",
+                token=None,
+                waiting_for="Backlog",
+            ),
+        )
+    )
+
+def test_component_transition_cascade_second_pull_at_limit_leaves_first_pull_applied(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="In Work",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for="In Work",
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-4",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for="In Progress",
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-6",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-7",
+                state="In Progress",
+                priority="a1",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-8",
+                state="In Progress",
+                priority="a2",
+                token=None,
+                waiting_for=None,
+            ),
+        )
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend_with_describe(
+            hook_command, initial_state, CHAINED_DESCRIBE_VIEW
+        )
+        env = dict(os.environ)
+        env["DESCRIBE_HOOK"] = hooks.describe
+        env["COUNT_HOOK"] = hooks.count
+        env["GET_STATE_HOOK"] = hooks.get_state
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["TRANSITION_HOOK"] = hooks.transition
+        env["SYSTEM_MOVE_HOOK"] = hooks.system_move
+        env["LIST_WAITING_HOOK"] = hooks.list_waiting
+        claim = runner.invoke(cli, ["claim-ticket", "In Work"], env=env, obj={})
+        transition = runner.invoke(
+            cli, ["transition", "ticket-2", "Done", "token-ticket-2"], env=env, obj={}
+        )
+        first_pulled_state = runner.invoke(
+            cli, ["get-state", "ticket-3"], env=env, obj={}
+        )
+        second_pulled_state = runner.invoke(
+            cli, ["get-state", "ticket-4"], env=env, obj={}
+        )
+        moved_state = runner.invoke(cli, ["get-state", "ticket-2"], env=env, obj={})
+        in_work_count = runner.invoke(cli, ["count", "In Work"], env=env, obj={})
+        in_progress_count = runner.invoke(
+            cli, ["count", "In Progress"], env=env, obj={}
+        )
+        done_count = runner.invoke(cli, ["count", "Done"], env=env, obj={})
+        state = read_mock_backend_state()
+    # THEN
+    assert claim.exception is None
+    assert claim.output.strip() == 'ticket = "ticket-2"\ntoken = "token-ticket-2"'
+    assert transition.exception is None
+    assert transition.output.strip() == "ticket-2"
+    assert first_pulled_state.exception is None
+    assert first_pulled_state.output.strip() == "In Work"
+    assert second_pulled_state.exception is None
+    assert second_pulled_state.output.strip() == "In Progress"
+    assert moved_state.exception is None
+    assert moved_state.output.strip() == "Done"
+    assert in_work_count.exception is None
+    assert in_work_count.output.strip() == "wait = 0\nwork = 1"
+    assert in_progress_count.exception is None
+    assert in_progress_count.output.strip() == "wait = 1\nwork = 3"
+    assert done_count.exception is None
+    assert done_count.output.strip() == "wait = 0\nwork = 1"
+    assert state == MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Done",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="In Work",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-4",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for="In Progress",
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-6",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-7",
+                state="In Progress",
+                priority="a1",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-8",
+                state="In Progress",
+                priority="a2",
+                token=None,
+                waiting_for=None,
+            ),
+        )
+    )

@@ -107,6 +107,34 @@ Backlog = {work = inf, wait = 3}
 Done = {work = inf, wait = inf}
 """
 
+CHAINED_DESCRIBE_VIEW = """states = ["Backlog", "In Progress", "In Work", "Done"]
+
+[transitions]
+Backlog = "In Progress"
+"In Progress" = "In Work"
+"In Work" = "Done"
+
+[wip_limits]
+Backlog = {work = inf, wait = 3}
+"In Progress" = {work = 3, wait = 2}
+"In Work" = {work = 3, wait = 2}
+Done = {work = inf, wait = inf}
+"""
+
+AMBIGUOUS_DESCRIBE_VIEW = """states = ["Backlog", "In Progress", "In Work", "Done"]
+
+[transitions]
+"In Progress" = "In Work"
+Backlog = "In Work"
+"In Work" = "Done"
+
+[wip_limits]
+Backlog = {work = inf, wait = 3}
+"In Progress" = {work = 3, wait = 2}
+"In Work" = {work = 3, wait = 2}
+Done = {work = inf, wait = inf}
+"""
+
 
 def _happy_case_id(case: TransitionHappyCase) -> str:
     return case.case_name
@@ -948,6 +976,113 @@ class PullRun(NamedTuple):
     called_hooks: tuple[str, ...]
 
 
+# A hook call the test never expects: exit 1, no output.
+# Any fake branch that returns this is a guard, not a stub.
+UNEXPECTED_HOOK_CALL = HookResult(1, "", "")
+
+# No cascade ticket is expected in a single-step test.
+NO_CASCADE_TICKET = ""
+
+
+class CascadeHookResults(NamedTuple):
+    predecessor_state: str
+    count_predecessor_result: HookResult
+    list_waiting_predecessor_result: HookResult
+    cascade_ticket: str
+    cascade_system_move_result: HookResult
+
+
+# A single-step test expects no cascade: any cascade hook
+# call is unexpected, so every cascade result is the guard.
+NO_CASCADE = CascadeHookResults(
+    predecessor_state="",
+    count_predecessor_result=UNEXPECTED_HOOK_CALL,
+    list_waiting_predecessor_result=UNEXPECTED_HOOK_CALL,
+    cascade_ticket=NO_CASCADE_TICKET,
+    cascade_system_move_result=UNEXPECTED_HOOK_CALL,
+)
+
+
+def _run_transition(
+    runner: CliRunner,
+    ticket: str,
+    to_state: str,
+    token: str,
+    old_state: str,
+    pull_ticket: str,
+    env: dict[str, str],
+    get_state_result: HookResult,
+    describe_result: HookResult,
+    count_to_result: HookResult,
+    count_old_result: HookResult,
+    transition_result: HookResult,
+    system_move_result: HookResult,
+    pull_system_move_result: HookResult,
+    list_waiting_result: HookResult,
+    cascade: CascadeHookResults,
+) -> PullRun:
+    called_hooks: list[str] = []
+
+    def _fake_run_hook(hook: str, hook_env: dict[str, str]) -> HookResult:
+        called_hooks.append(hook)
+        if hook == env.get("GET_STATE_HOOK"):
+            if hook_env != {"WORKPULL_TICKET": ticket}:
+                return UNEXPECTED_HOOK_CALL
+            return get_state_result
+        if hook == env.get("DESCRIBE_HOOK"):
+            if hook_env != {}:
+                return UNEXPECTED_HOOK_CALL
+            return describe_result
+        if hook == env.get("COUNT_HOOK"):
+            if hook_env == {"WORKPULL_STATE": to_state}:
+                return count_to_result
+            if hook_env == {"WORKPULL_STATE": old_state}:
+                return count_old_result
+            if hook_env == {"WORKPULL_STATE": cascade.predecessor_state}:
+                return cascade.count_predecessor_result
+            return UNEXPECTED_HOOK_CALL
+        if hook == env.get("TRANSITION_HOOK"):
+            if hook_env != {
+                "WORKPULL_TICKET": ticket,
+                "WORKPULL_TO_STATE": to_state,
+                "WORKPULL_TOKEN": token,
+            }:
+                return UNEXPECTED_HOOK_CALL
+            return transition_result
+        if hook == env.get("SYSTEM_MOVE_HOOK"):
+            if hook_env == {
+                "WORKPULL_TICKET": transition_result.stdout.strip(),
+                "WORKPULL_TO_STATE": to_state,
+            }:
+                return system_move_result
+            if hook_env == {
+                "WORKPULL_TICKET": pull_ticket,
+                "WORKPULL_TO_STATE": old_state,
+            }:
+                return pull_system_move_result
+            if hook_env == {
+                "WORKPULL_TICKET": cascade.cascade_ticket,
+                "WORKPULL_TO_STATE": cascade.predecessor_state,
+            }:
+                return cascade.cascade_system_move_result
+            return UNEXPECTED_HOOK_CALL
+        if hook == env.get("LIST_WAITING_HOOK"):
+            if hook_env == {"WORKPULL_STATE": old_state}:
+                return list_waiting_result
+            if hook_env == {"WORKPULL_STATE": cascade.predecessor_state}:
+                return cascade.list_waiting_predecessor_result
+            return UNEXPECTED_HOOK_CALL
+        return UNEXPECTED_HOOK_CALL
+
+    result = runner.invoke(
+        cli,
+        ["transition", ticket, to_state, token],
+        env=env,
+        obj={"run_hook": _fake_run_hook},
+    )
+    return PullRun(result=result, called_hooks=tuple(called_hooks))
+
+
 RunTransitionPull = Callable[
     [
         str,
@@ -963,6 +1098,32 @@ RunTransitionPull = Callable[
         HookResult,
         HookResult,
         HookResult,
+        HookResult,
+    ],
+    PullRun,
+]
+
+
+RunTransitionCascade = Callable[
+    [
+        str,
+        str,
+        str,
+        str,
+        str,
+        dict[str, str],
+        HookResult,
+        HookResult,
+        HookResult,
+        HookResult,
+        HookResult,
+        HookResult,
+        HookResult,
+        HookResult,
+        str,
+        HookResult,
+        HookResult,
+        str,
         HookResult,
     ],
     PullRun,
@@ -987,57 +1148,75 @@ def run_transition_pull(runner: CliRunner) -> RunTransitionPull:
         pull_system_move_result: HookResult,
         list_waiting_result: HookResult,
     ) -> PullRun:
-        called_hooks: list[str] = []
-
-        def _fake_run_hook(hook: str, hook_env: dict[str, str]) -> HookResult:
-            called_hooks.append(hook)
-            if hook == env.get("GET_STATE_HOOK"):
-                if hook_env != {"WORKPULL_TICKET": ticket}:
-                    return HookResult(1, "", "")
-                return get_state_result
-            if hook == env.get("DESCRIBE_HOOK"):
-                if hook_env != {}:
-                    return HookResult(1, "", "")
-                return describe_result
-            if hook == env.get("COUNT_HOOK"):
-                if hook_env == {"WORKPULL_STATE": to_state}:
-                    return count_to_result
-                if hook_env == {"WORKPULL_STATE": old_state}:
-                    return count_old_result
-                return HookResult(1, "", "")
-            if hook == env.get("TRANSITION_HOOK"):
-                if hook_env != {
-                    "WORKPULL_TICKET": ticket,
-                    "WORKPULL_TO_STATE": to_state,
-                    "WORKPULL_TOKEN": token,
-                }:
-                    return HookResult(1, "", "")
-                return transition_result
-            if hook == env.get("SYSTEM_MOVE_HOOK"):
-                if hook_env == {
-                    "WORKPULL_TICKET": transition_result.stdout.strip(),
-                    "WORKPULL_TO_STATE": to_state,
-                }:
-                    return system_move_result
-                if hook_env == {
-                    "WORKPULL_TICKET": pull_ticket,
-                    "WORKPULL_TO_STATE": old_state,
-                }:
-                    return pull_system_move_result
-                return HookResult(1, "", "")
-            if hook == env.get("LIST_WAITING_HOOK"):
-                if hook_env != {"WORKPULL_STATE": old_state}:
-                    return HookResult(1, "", "")
-                return list_waiting_result
-            return HookResult(1, "", "")
-
-        result = runner.invoke(
-            cli,
-            ["transition", ticket, to_state, token],
-            env=env,
-            obj={"run_hook": _fake_run_hook},
+        return _run_transition(
+            runner,
+            ticket,
+            to_state,
+            token,
+            old_state,
+            pull_ticket,
+            env,
+            get_state_result,
+            describe_result,
+            count_to_result,
+            count_old_result,
+            transition_result,
+            system_move_result,
+            pull_system_move_result,
+            list_waiting_result,
+            NO_CASCADE,
         )
-        return PullRun(result=result, called_hooks=tuple(called_hooks))
+
+    return _run
+
+
+@pytest.fixture
+def run_transition_cascade(runner: CliRunner) -> RunTransitionCascade:
+    def _run(
+        ticket: str,
+        to_state: str,
+        token: str,
+        old_state: str,
+        pull_ticket: str,
+        env: dict[str, str],
+        get_state_result: HookResult,
+        describe_result: HookResult,
+        count_to_result: HookResult,
+        count_old_result: HookResult,
+        transition_result: HookResult,
+        system_move_result: HookResult,
+        pull_system_move_result: HookResult,
+        list_waiting_result: HookResult,
+        predecessor_state: str,
+        count_predecessor_result: HookResult,
+        list_waiting_predecessor_result: HookResult,
+        cascade_ticket: str,
+        cascade_system_move_result: HookResult,
+    ) -> PullRun:
+        return _run_transition(
+            runner,
+            ticket,
+            to_state,
+            token,
+            old_state,
+            pull_ticket,
+            env,
+            get_state_result,
+            describe_result,
+            count_to_result,
+            count_old_result,
+            transition_result,
+            system_move_result,
+            pull_system_move_result,
+            list_waiting_result,
+            CascadeHookResults(
+                predecessor_state=predecessor_state,
+                count_predecessor_result=count_predecessor_result,
+                list_waiting_predecessor_result=list_waiting_predecessor_result,
+                cascade_ticket=cascade_ticket,
+                cascade_system_move_result=cascade_system_move_result,
+            ),
+        )
 
     return _run
 
@@ -1254,6 +1433,11 @@ class PullTransitionCase(NamedTuple):
     count_old_wait_tickets: tuple[str, ...]
     list_waiting_result: HookResult
     expected_system_move_calls: int
+    predecessor_state: str
+    count_predecessor_result: HookResult
+    list_waiting_predecessor_result: HookResult
+    expected_count_calls: int
+    expected_list_calls: int
 
 
 def _pull_transition_case_id(case: PullTransitionCase) -> str:
@@ -1276,6 +1460,13 @@ def _pull_transition_case_id(case: PullTransitionCase) -> str:
             count_old_wait_tickets=("ticket-3",),
             list_waiting_result=HookResult(0, 'tickets = ["ticket-3"]\n', ""),
             expected_system_move_calls=2,
+            predecessor_state="Backlog",
+            count_predecessor_result=HookResult(0, "wait = 0\nwork = 0\n", ""),
+            list_waiting_predecessor_result=HookResult(
+                0, "tickets = []\n", ""
+            ),
+            expected_count_calls=3,
+            expected_list_calls=2,
         ),
         PullTransitionCase(
             case_name="highest_priority_of_two_waiting_tickets",
@@ -1292,6 +1483,15 @@ def _pull_transition_case_id(case: PullTransitionCase) -> str:
                 0, 'tickets = ["ticket-3", "ticket-4"]\n', ""
             ),
             expected_system_move_calls=2,
+            predecessor_state="Backlog",
+            # Ticket-4 still counts as Backlog work while it
+            # waits for In Progress, so work is 1 here.
+            count_predecessor_result=HookResult(0, "wait = 0\nwork = 1\n", ""),
+            list_waiting_predecessor_result=HookResult(
+                0, "tickets = []\n", ""
+            ),
+            expected_count_calls=3,
+            expected_list_calls=2,
         ),
         PullTransitionCase(
             case_name="after_event_9",
@@ -1306,12 +1506,21 @@ def _pull_transition_case_id(case: PullTransitionCase) -> str:
             count_old_wait_tickets=("ticket-3",),
             list_waiting_result=HookResult(0, 'tickets = ["ticket-3"]\n', ""),
             expected_system_move_calls=1,
+            # Backlog has no predecessor, so no second pull
+            # runs and these results are never consumed.
+            predecessor_state="",
+            count_predecessor_result=HookResult(0, "wait = 0\nwork = 0\n", ""),
+            list_waiting_predecessor_result=HookResult(
+                0, "tickets = []\n", ""
+            ),
+            expected_count_calls=2,
+            expected_list_calls=1,
         ),
     ],
     ids=_pull_transition_case_id,
 )
 def test_transition_pull(
-    run_transition_pull: RunTransitionPull, case: PullTransitionCase
+    run_transition_cascade: RunTransitionCascade, case: PullTransitionCase
 ) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 0, "ticket_id": case.ticket}
@@ -1323,7 +1532,7 @@ def test_transition_pull(
     env["TRANSITION_HOOK"] = "fake-transition"
     env["SYSTEM_MOVE_HOOK"] = "fake-system-move"
     env["LIST_WAITING_HOOK"] = "fake-list-waiting"
-    run = run_transition_pull(
+    run = run_transition_cascade(
         case.ticket,
         case.to_state,
         "token-1",
@@ -1338,6 +1547,11 @@ def test_transition_pull(
         HookResult(0, f"{case.ticket}\n", ""),
         HookResult(0, f"{case.pull_ticket}\n", ""),
         case.list_waiting_result,
+        case.predecessor_state,
+        case.count_predecessor_result,
+        case.list_waiting_predecessor_result,
+        NO_CASCADE_TICKET,
+        UNEXPECTED_HOOK_CALL,
     )
     result = run.result
     # THEN
@@ -1348,11 +1562,11 @@ def test_transition_pull(
         f"wait = {len(case.count_old_wait_tickets)}\n"
         f"work = {len(case.count_old_work_tickets)}\n"
     )
-    assert run.called_hooks.count("fake-list-waiting") == 1
+    assert run.called_hooks.count("fake-list-waiting") == case.expected_list_calls
     assert run.called_hooks.count("fake-system-move") == case.expected_system_move_calls
     assert run.called_hooks.count("fake-get-state") == 1
     assert run.called_hooks.count("fake-transition") == 1
-    assert run.called_hooks.count("fake-count") == 2
+    assert run.called_hooks.count("fake-count") == case.expected_count_calls
     assert run.called_hooks.count("fake-describe") == 1
 
 
@@ -1462,3 +1676,189 @@ def test_transition_pull_system_move_missing_hook_after_event_9(
     assert result.output == "SYSTEM_MOVE_HOOK is not set\n"
     assert run.called_hooks.count("fake-list-waiting") == 1
     assert "fake-system-move" not in run.called_hooks
+
+class CascadeHappyCase(NamedTuple):
+    case_name: str
+    describe_result: HookResult
+    predecessor_state: str
+
+
+def _cascade_happy_case_id(case: CascadeHappyCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        CascadeHappyCase(
+            case_name="chained_view",
+            describe_result=HookResult(0, CHAINED_DESCRIBE_VIEW, ""),
+            predecessor_state="In Progress",
+        ),
+        CascadeHappyCase(
+            # Backlog and In Progress both transition to In Work.
+            # The transitions table lists In Progress first, but
+            # Backlog is first in the states list, so the second
+            # pull goes to Backlog, not In Progress.
+            case_name="ambiguous_predecessor_first_in_states_order",
+            describe_result=HookResult(0, AMBIGUOUS_DESCRIBE_VIEW, ""),
+            predecessor_state="Backlog",
+        ),
+    ],
+    ids=_cascade_happy_case_id,
+)
+def test_transition_two_step_cascade_pulls_backwards(
+    run_transition_cascade: RunTransitionCascade, case: CascadeHappyCase
+) -> None:
+    # GIVEN
+    expected: TicketOutcome = {"exit_code": 0, "ticket_id": "ticket-2"}
+    # WHEN
+    env = dict(os.environ)
+    env["GET_STATE_HOOK"] = "fake-get-state"
+    env["DESCRIBE_HOOK"] = "fake-describe"
+    env["COUNT_HOOK"] = "fake-count"
+    env["TRANSITION_HOOK"] = "fake-transition"
+    env["SYSTEM_MOVE_HOOK"] = "fake-system-move"
+    env["LIST_WAITING_HOOK"] = "fake-list-waiting"
+    run = run_transition_cascade(
+        "ticket-2",
+        "Done",
+        "token-1",
+        "In Work",
+        "ticket-3",
+        env,
+        HookResult(0, "In Work\n", ""),
+        case.describe_result,
+        HookResult(0, "wait = 0\nwork = 0\n", ""),
+        HookResult(0, "wait = 1\nwork = 0\n", ""),
+        HookResult(0, "ticket-2\n", ""),
+        HookResult(0, "ticket-2\n", ""),
+        HookResult(0, "ticket-3\n", ""),
+        HookResult(0, 'tickets = ["ticket-3"]\n', ""),
+        case.predecessor_state,
+        HookResult(0, "wait = 1\nwork = 0\n", ""),
+        HookResult(0, 'tickets = ["ticket-4"]\n', ""),
+        "ticket-4",
+        HookResult(0, "ticket-4\n", ""),
+    )
+    result = run.result
+    # THEN
+    assert result.exception is None
+    actual: TicketOutcome = transition_outcome(result)
+    assert expected == actual
+    assert run.called_hooks.count("fake-list-waiting") == 2
+    assert run.called_hooks.count("fake-system-move") == 3
+    assert run.called_hooks.count("fake-get-state") == 1
+    assert run.called_hooks.count("fake-transition") == 1
+    assert run.called_hooks.count("fake-count") == 3
+    assert run.called_hooks.count("fake-describe") == 1
+
+
+class CascadeFailureCase(NamedTuple):
+    case_name: str
+    count_cascade_result: HookResult
+    list_waiting_cascade_result: HookResult
+    cascade_system_move_result: HookResult
+    expected_exit_code: int
+    expected_output: str
+    expected_list_calls: int
+    expected_system_move_calls: int
+
+
+def _cascade_failure_case_id(case: CascadeFailureCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        CascadeFailureCase(
+            case_name="cascade_count_at_limit",
+            count_cascade_result=HookResult(0, "wait = 1\nwork = 3\n", ""),
+            list_waiting_cascade_result=HookResult(
+                0, 'tickets = ["ticket-4"]\n', ""
+            ),
+            cascade_system_move_result=HookResult(0, "ticket-4\n", ""),
+            expected_exit_code=0,
+            expected_output="ticket-2\n",
+            expected_list_calls=1,
+            expected_system_move_calls=2,
+        ),
+        CascadeFailureCase(
+            case_name="cascade_list_waiting_failing",
+            count_cascade_result=HookResult(0, "wait = 1\nwork = 0\n", ""),
+            list_waiting_cascade_result=HookResult(3, "", ""),
+            cascade_system_move_result=HookResult(0, "ticket-4\n", ""),
+            expected_exit_code=3,
+            expected_output="",
+            expected_list_calls=2,
+            expected_system_move_calls=2,
+        ),
+        CascadeFailureCase(
+            case_name="cascade_system_move_failing",
+            count_cascade_result=HookResult(0, "wait = 1\nwork = 0\n", ""),
+            list_waiting_cascade_result=HookResult(
+                0, 'tickets = ["ticket-4"]\n', ""
+            ),
+            cascade_system_move_result=HookResult(3, "", ""),
+            expected_exit_code=3,
+            expected_output="",
+            expected_list_calls=2,
+            expected_system_move_calls=3,
+        ),
+    ],
+    ids=_cascade_failure_case_id,
+)
+def test_transition_cascade_failure(
+    run_transition_cascade: RunTransitionCascade, case: CascadeFailureCase
+) -> None:
+    # GIVEN
+    expected: TicketOutcome = {
+        "exit_code": case.expected_exit_code,
+        "ticket_id": "ticket-2" if case.expected_exit_code == 0 else None,
+    }
+    # WHEN
+    env = dict(os.environ)
+    env["GET_STATE_HOOK"] = "fake-get-state"
+    env["DESCRIBE_HOOK"] = "fake-describe"
+    env["COUNT_HOOK"] = "fake-count"
+    env["TRANSITION_HOOK"] = "fake-transition"
+    env["SYSTEM_MOVE_HOOK"] = "fake-system-move"
+    env["LIST_WAITING_HOOK"] = "fake-list-waiting"
+    run = run_transition_cascade(
+        "ticket-2",
+        "Done",
+        "token-1",
+        "In Work",
+        "ticket-3",
+        env,
+        HookResult(0, "In Work\n", ""),
+        HookResult(0, CHAINED_DESCRIBE_VIEW, ""),
+        HookResult(0, "wait = 0\nwork = 0\n", ""),
+        HookResult(0, "wait = 1\nwork = 0\n", ""),
+        HookResult(0, "ticket-2\n", ""),
+        HookResult(0, "ticket-2\n", ""),
+        HookResult(0, "ticket-3\n", ""),
+        HookResult(0, 'tickets = ["ticket-3"]\n', ""),
+        "In Progress",
+        case.count_cascade_result,
+        case.list_waiting_cascade_result,
+        "ticket-4",
+        case.cascade_system_move_result,
+    )
+    result = run.result
+    # THEN
+    actual: TicketOutcome = transition_outcome(result)
+    assert expected == actual
+    assert result.output == case.expected_output
+    assert run.called_hooks.count("fake-list-waiting") == case.expected_list_calls
+    assert (
+        run.called_hooks.count("fake-system-move")
+        == case.expected_system_move_calls
+    )
+    assert run.called_hooks.count("fake-get-state") == 1
+    assert run.called_hooks.count("fake-transition") == 1
+    assert run.called_hooks.count("fake-count") == 3
+    assert run.called_hooks.count("fake-describe") == 1
+
+
