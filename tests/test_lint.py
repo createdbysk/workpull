@@ -18,6 +18,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = ROOT / "tests" / "lint_probe.py"
+PROBE_DISPLAY_PATH = str(Path("tests") / "lint_probe.py")
 
 
 class Outcome(NamedTuple):
@@ -81,7 +82,7 @@ def first() -> None:
     print(os.name)
 """,
             expected_output=(
-                "tests/lint_probe.py:3:1: blank-lines-top-level: "
+                f"{PROBE_DISPLAY_PATH}:3:1: blank-lines-top-level: "
                 "[*] Expected 2 blank lines, found 1\n"
                 "Found 1 error.\n"
                 "[*] 1 fixable with `--fix`.\n"
@@ -97,7 +98,7 @@ def first() -> None:
     print(os.name)
 """,
             expected_output=(
-                "tests/lint_probe.py:5:1: too-many-blank-lines: "
+                f"{PROBE_DISPLAY_PATH}:5:1: too-many-blank-lines: "
                 "[*] Too many blank lines (3)\n"
                 "Found 1 error.\n"
                 "[*] 1 fixable with `--fix`.\n"
@@ -116,7 +117,7 @@ def first() -> None:
     print("again")
 """,
             expected_output=(
-                "tests/lint_probe.py:9:5: too-many-blank-lines: "
+                f"{PROBE_DISPLAY_PATH}:9:5: too-many-blank-lines: "
                 "[*] Too many blank lines (3)\n"
                 "Found 1 error.\n"
                 "[*] 1 fixable with `--fix`.\n"
@@ -133,7 +134,7 @@ def first() -> None:
                 "\n"
             ),
             expected_output=(
-                "tests/lint_probe.py:6:1: "
+                f"{PROBE_DISPLAY_PATH}:6:1: "
                 "too-many-newlines-at-end-of-file: "
                 "[*] Extra newline at end of file\n"
                 "Found 1 error.\n"
@@ -150,7 +151,7 @@ def first() -> None:
                 "    print(os.name)"
             ),
             expected_output=(
-                "tests/lint_probe.py:5:19: "
+                f"{PROBE_DISPLAY_PATH}:5:19: "
                 "missing-newline-at-end-of-file: "
                 "[*] No newline at end of file\n"
                 "Found 1 error.\n"
