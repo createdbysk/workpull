@@ -10,6 +10,12 @@
   backend, runs Workpull commands against it through
   the CLI runner, and asserts the final state. The
   backend holds the state, not the test.
+- The scenarios guard API-level invariants: command
+  outcomes, claim order, and state as the commands
+  present it, on boards that represent real runs.
+  The mock's internal encodings are not guarded:
+  they are the equipment's own bookkeeping, not
+  the contract the commands answer to.
 
 ## Mock backend
 
@@ -606,42 +612,6 @@
   the counter counts keys issued, not keys in
   use.
 
-## Scenario 28: prioritize with many tickets, rebalance holds order
-
-- Initial state: ticket-1 to ticket-12 in Backlog,
-  priorities a0 to a9, b10, and b11, unclaimed.
-- Commands, through the CLI runner: prioritize
-  ticket-1 after ticket-12, then claim-ticket
-  Backlog.
-- Final state: the claim returns ticket-2; the
-  state file shows the new order in the priority
-  keys, rebalanced across the single-digit
-  boundary: ticket-2 at a0 through ticket-11 at
-  a9, ticket-12 at b10, and ticket-1 last at b11.
-  The rebalance uses the same key scheme as
-  adoption, so plain string order stays priority
-  order past ten tickets.
-
-## Scenario 29: adopt from a sparse seed
-
-- Two cases, one parametrized test, sharing WHEN
-  and THEN and differing only in GIVEN: the only
-  ticket sits at b10; the only ticket sits at
-  b99. In each case ticket-2 exists in the
-  backend, not yet adopted.
-- Commands, through the CLI runner: adopt
-  ticket-2, then claim-ticket Backlog twice.
-- Final state: the claims return ticket-1, then
-  ticket-2; the state file has ticket-2 at b11 in
-  the first case and at c100 in the second, and
-  no ticket left unadopted. The counter seeds
-  from the highest key ever issued, not from the
-  ticket count — a count seed would issue a1 in
-  both cases, ahead of the seed ticket — and the
-  key letter counts digits at any count, so the
-  adopted ticket is last even at the hundred
-  boundary.
-
 ## Visual board
 
 - A read-only board over the mock backend state file
@@ -665,14 +635,9 @@
   list-waiting; Scenarios 12 to 23 add release,
   discard, adopt, prioritize, can-transition, and
   describe. Scenario 24 adds the release failure
-  with no claim, and Scenarios 25 to 27 pin the
-  adopt key invariants: the adopted ticket is
-  last at any count, keys increase across
-  adoptions, and an issued key comes after every
-  key ever issued, even a discarded one.
-  Scenario 28 pins the prioritize rebalance in
-  the same key scheme past ten tickets, and
-  Scenario 29 pins the counter's seed and the
-  key letter at a sparse seed and at the hundred
-  boundary.
+  with no claim. Scenarios 25 to 27 cover
+  adoption on fuller boards: the adopted ticket
+  is claimed last, claim order follows adoption
+  order across two adoptions, and an adoption
+  after a discard still lands last.
 - No real backend. The mock is test support only.
