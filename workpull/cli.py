@@ -283,6 +283,22 @@ def release(ticket: str, token: str, run_hook_fn: RunHook) -> None:
     click.echo(ticket_id)
 
 
+def discard(ticket: str, token: str, run_hook_fn: RunHook) -> None:
+    """Discard a ticket."""
+    hook = os.environ.get("DISCARD_HOOK")
+    if not hook:
+        click.echo("DISCARD_HOOK is not set", err=True)
+        raise click.exceptions.Exit(2)
+    result = run_hook_fn(hook, {"WORKPULL_TICKET": ticket, "WORKPULL_TOKEN": token})
+    if result.returncode != 0:
+        raise click.exceptions.Exit(result.returncode)
+    ticket_id = result.stdout.strip()
+    if not ticket_id:
+        click.echo("discard hook returned no ticket id", err=True)
+        raise click.exceptions.Exit(2)
+    click.echo(ticket_id)
+
+
 def validate_count(counts: object) -> str | None:
     """Validate a parsed count document. Returns an error string or None.
 
@@ -611,6 +627,15 @@ def prioritize_command(ctx: click.Context, ticket: str, after: str) -> None:
 def release_command(ctx: click.Context, ticket: str, token: str) -> None:
     """Release a ticket's claim."""
     release(ticket, token, ctx.obj["run_hook"])
+
+
+@cli.command(name="discard")
+@click.argument("ticket")
+@click.argument("token")
+@click.pass_context
+def discard_command(ctx: click.Context, ticket: str, token: str) -> None:
+    """Discard a ticket."""
+    discard(ticket, token, ctx.obj["run_hook"])
 
 
 @cli.command(name="count")

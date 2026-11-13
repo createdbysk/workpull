@@ -44,6 +44,7 @@ def test_top_level_help_lists_commands(
               claim-ticket  Claim a single ticket in a state.
               count         Count tickets in a state.
               describe      Describe a backend's states and transitions.
+              discard       Discard a ticket.
               get-state     Get a ticket's current state.
               prioritize    Move a ticket to a new priority.
               release       Release a ticket's claim.
