@@ -55,8 +55,10 @@ Do not front-load later requirements.
    not a reason to pivot the design.
    `<interpreter> scripts/dev.py install` refuses to run
    outside an activated venv. No system install is supported.
-   Finish the bootstrap with
-   `git config core.hooksPath .githooks`, so commits in this
+   Finish the bootstrap by installing the git hooks with
+   prek: install prek first (see <https://prek.j178.dev>),
+   then run `prek install` and
+   `prek install --hook-type pre-push`, so commits in this
    clone run lint and type first and pushes run the tests
    first.
 1. Requirement: write `requirements/<nnn>-<name>.md`, what only.

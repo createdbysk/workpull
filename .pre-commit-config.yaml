@@ -1,0 +1,21 @@
+repos:
+  - repo: local
+    hooks:
+      - id: lint
+        name: Lint
+        entry: python scripts/dev.py lint
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: type
+        name: Type check
+        entry: python scripts/dev.py type
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: test
+        name: Tests
+        entry: python scripts/dev.py test
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

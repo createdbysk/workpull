@@ -42,9 +42,11 @@ All developer tasks are a Python script, stdlib only, cross-platform.
 - Agent bootstrap, on a fresh clone, before any other work:
   find the interpreter as in Ergonomics, then run
   `<interpreter> scripts/dev.py setup`. The agent runs this itself.
-- Git hooks: the hook scripts live in `.githooks/`. Point
-  git at them once per clone:
-  `git config core.hooksPath .githooks`. After that, a
+- Git hooks: prek manages the hooks, configured in
+  `.pre-commit-config.yaml`. Install prek once per machine,
+  see <https://prek.j178.dev> for installation, then install
+  the hooks once per clone: `prek install` and
+  `prek install --hook-type pre-push`. After that, a
   commit runs lint and type first, and a push runs the
   tests first; a failed check stops the commit or the push.
 - After setup, activate the venv for interactive work:
@@ -80,7 +82,8 @@ All `python` commands below are the venv Python, after setup.
   copy, no copies in per-agent folders, to avoid drift. Agents
   that do not auto-load `.agents/skills/` should load them
   from there directly.
-- `.githooks/` — git hook scripts, turned on by the Install
+- `.pre-commit-config.yaml` — prek hook config: lint and
+  type at commit, tests at push, turned on by the Install
   step above.
 - `requirements/` — what is required, no implementation detail.
 - `design/` — how a requirement is met.
