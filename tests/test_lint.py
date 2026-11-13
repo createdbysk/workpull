@@ -144,11 +144,7 @@ def first() -> None:
         LintCase(
             case_name="file_ends_without_newline",
             probe_source=(
-                "import os\n"
-                "\n"
-                "\n"
-                "def first() -> None:\n"
-                "    print(os.name)"
+                "import os\n" "\n" "\n" "def first() -> None:\n" "    print(os.name)"
             ),
             expected_output=(
                 f"{PROBE_DISPLAY_PATH}:5:19: "

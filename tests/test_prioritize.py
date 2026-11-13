@@ -54,7 +54,9 @@ def prioritize_outcome(result: Result) -> TicketOutcome:
 
 @pytest.fixture
 def run_prioritize(runner: CliRunner) -> RunPrioritize:
-    def _run(ticket: str, after: str, env: dict[str, str], hook_result: HookResult) -> Result:
+    def _run(
+        ticket: str, after: str, env: dict[str, str], hook_result: HookResult
+    ) -> Result:
         def _fake_run_hook(hook: str, hook_env: dict[str, str]) -> HookResult:
             if hook != env.get("PRIORITIZE_HOOK"):
                 return HookResult(1, "", "")
@@ -103,7 +105,11 @@ def test_prioritize_top(run_prioritize: RunPrioritize) -> None:
     assert expected == actual
 
 
-def test_prioritize_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
+def test_prioritize_real_hook(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 0, "ticket_id": "ticket-1"}
     # WHEN
@@ -162,15 +168,13 @@ def test_prioritize_help(runner: CliRunner, normalize_help: NormalizeHelp) -> No
     # GIVEN
     expected: HelpOutcome = {
         "exit_code": 0,
-        "help_text": normalize_help(
-            """Usage: cli prioritize [OPTIONS] TICKET AFTER
+        "help_text": normalize_help("""Usage: cli prioritize [OPTIONS] TICKET AFTER
 
             Move a ticket to a new priority.
 
             Options:
               --help  Show this message and exit.
-            """
-        ),
+            """),
     }
     # WHEN
     result = runner.invoke(cli, ["prioritize", "--help"])

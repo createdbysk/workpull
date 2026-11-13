@@ -81,14 +81,20 @@ def test_release_happy_path(run_release: RunRelease, ticket_id: str) -> None:
     # WHEN
     env = dict(os.environ)
     env["RELEASE_HOOK"] = "fake-hook"
-    result = run_release("ticket-1", "token-1", env, HookResult(0, f"{ticket_id}\n", ""))
+    result = run_release(
+        "ticket-1", "token-1", env, HookResult(0, f"{ticket_id}\n", "")
+    )
     # THEN
     assert result.exception is None
     actual: TicketOutcome = release_outcome(result)
     assert expected == actual
 
 
-def test_release_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
+def test_release_real_hook(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 0, "ticket_id": "ticket-1"}
     # WHEN
@@ -143,15 +149,13 @@ def test_release_help(runner: CliRunner, normalize_help: NormalizeHelp) -> None:
     # GIVEN
     expected: HelpOutcome = {
         "exit_code": 0,
-        "help_text": normalize_help(
-            """Usage: cli release [OPTIONS] TICKET TOKEN
+        "help_text": normalize_help("""Usage: cli release [OPTIONS] TICKET TOKEN
 
             Release a ticket's claim.
 
             Options:
               --help  Show this message and exit.
-            """
-        ),
+            """),
     }
     # WHEN
     result = runner.invoke(cli, ["release", "--help"])

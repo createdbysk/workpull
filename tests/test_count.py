@@ -158,9 +158,7 @@ def _invalid_case_id(case: CountInvalidCase) -> str:
     ],
     ids=_invalid_case_id,
 )
-def test_count_invalid_output(
-    run_count: RunCount, case: CountInvalidCase
-) -> None:
+def test_count_invalid_output(run_count: RunCount, case: CountInvalidCase) -> None:
     # GIVEN
     expected: CountOutcome = {"exit_code": 2, "output": None}
     # WHEN
@@ -172,7 +170,11 @@ def test_count_invalid_output(
     assert expected == actual
 
 
-def test_count_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
+def test_count_real_hook(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
     # GIVEN
     expected: CountOutcome = {"exit_code": 0, "output": "wait = 2\nwork = 3"}
     # WHEN
@@ -191,15 +193,13 @@ def test_count_help(runner: CliRunner, normalize_help: NormalizeHelp) -> None:
     # GIVEN
     expected: HelpOutcome = {
         "exit_code": 0,
-        "help_text": normalize_help(
-            """Usage: cli count [OPTIONS] STATE
+        "help_text": normalize_help("""Usage: cli count [OPTIONS] STATE
 
             Count tickets in a state.
 
             Options:
               --help  Show this message and exit.
-            """
-        ),
+            """),
     }
     # WHEN
     result = runner.invoke(cli, ["count", "--help"])

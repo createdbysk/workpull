@@ -133,11 +133,25 @@ def cmd_lint(_args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    black = shutil.which("black")
+    if not black:
+        for name in ("black", "black.exe"):
+            venv_black = venv_python().parent / name
+            if venv_black.exists():
+                black = str(venv_black)
+                break
+    if not black:
+        print(
+            "error: black not found. Run: python scripts/dev.py setup",
+            file=sys.stderr,
+        )
+        return 1
     markdown_code = run(
         [pymarkdown, "--config", ".pymarkdown.json", "scan", *LINT_FILES]
     )
     ruff_code = run([ruff, "check", "--output-format", "concise", *PYTHON_FILES])
-    return 1 if markdown_code or ruff_code else 0
+    black_code = run([black, "--check", *PYTHON_FILES])
+    return 1 if markdown_code or ruff_code or black_code else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -146,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("setup", help="Create .venv and install dev deps.")
     sub.add_parser("install", help="Install, only inside an activated venv.")
     sub.add_parser("test", help="Run pytest.")
-    sub.add_parser("lint", help="Run pymarkdown on docs and Ruff on Python.")
+    sub.add_parser("lint", help="Run pymarkdown on docs, Ruff and Black on Python.")
     sub.add_parser("type", help="Run pyrefly type check.")
     args = parser.parse_args(argv)
     commands = {

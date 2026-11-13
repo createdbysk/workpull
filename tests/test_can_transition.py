@@ -461,7 +461,11 @@ def test_can_transition_unknown_to_state_is_false(
     assert expected == actual
 
 
-def test_can_transition_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
+def test_can_transition_real_hook(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
     # GIVEN
     expected: CanTransitionOutcome = {"exit_code": 0, "output": "true"}
     # WHEN

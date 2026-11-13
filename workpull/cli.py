@@ -42,9 +42,7 @@ RunHook = Callable[[str, dict[str, str]], HookResult]
 _STATE_NAME = re.compile(r"^[A-Za-z0-9 _-]+$")
 
 
-def run_hook(
-    hook_command: str, env: dict[str, str]
-) -> HookResult:
+def run_hook(hook_command: str, env: dict[str, str]) -> HookResult:
     """Run a hook command, no shell. Returns a HookResult.
 
     The hook command is in canonical POSIX form, on every
@@ -97,7 +95,9 @@ def validate_describe(view: object) -> str | None:
     if not isinstance(view, dict):
         return "describe output is not a TOML document"
     if set(view) != {"states", "transitions", "wip_limits"}:
-        return "describe output must contain exactly states, transitions, and wip_limits"
+        return (
+            "describe output must contain exactly states, transitions, and wip_limits"
+        )
     states = view["states"]
     transitions = view["transitions"]
     if not isinstance(states, list) or not states:
@@ -108,11 +108,7 @@ def validate_describe(view: object) -> str | None:
     if len(states) != len(set(states)):
         return "states must be unique"
     for state in states:
-        if (
-            not _STATE_NAME.match(state)
-            or state != state.strip()
-            or not state.strip()
-        ):
+        if not _STATE_NAME.match(state) or state != state.strip() or not state.strip():
             return f"invalid state name: {state!r}"
     if not isinstance(transitions, dict):
         return "transitions must be a table"
@@ -125,7 +121,9 @@ def validate_describe(view: object) -> str | None:
         if target not in order:
             return f"transition target not in states: {target!r}"
         if order[target] <= order[source]:
-            return f"transition target must be later than source: {source!r} -> {target!r}"
+            return (
+                f"transition target must be later than source: {source!r} -> {target!r}"
+            )
     wip_limits = view["wip_limits"]
     if not isinstance(wip_limits, dict):
         return "wip_limits must be a table"
@@ -191,9 +189,7 @@ def claim_ticket(state: str, run_hook_fn: RunHook) -> None:
         or not isinstance(claim["token"], str)
         or not claim["token"]
     ):
-        click.echo(
-            "invalid claim-ticket output: expected ticket and token", err=True
-        )
+        click.echo("invalid claim-ticket output: expected ticket and token", err=True)
         raise click.exceptions.Exit(2)
     click.echo(result.stdout.strip())
 
@@ -214,9 +210,7 @@ def describe(run_hook_fn: RunHook) -> None:
     try:
         view = tomllib.loads(result.stdout)
     except tomllib.TOMLDecodeError as exc:
-        click.echo(
-            f"describe hook output is not valid TOML: {exc}", err=True
-        )
+        click.echo(f"describe hook output is not valid TOML: {exc}", err=True)
         raise click.exceptions.Exit(2)
     error = validate_describe(view)
     if error:
@@ -411,7 +405,9 @@ def _fetch_counts(to_state: str, run_hook_fn: RunHook) -> StateCounts:
     return StateCounts(wait=counts["wait"], work=counts["work"])
 
 
-def _check_transition(ticket: str, to_state: str, run_hook_fn: RunHook) -> TransitionCheck:
+def _check_transition(
+    ticket: str, to_state: str, run_hook_fn: RunHook
+) -> TransitionCheck:
     current_state = _fetch_current_state(ticket, run_hook_fn)
     view = _fetch_describe_view(run_hook_fn)
     if to_state not in view["wip_limits"]:
@@ -469,8 +465,7 @@ def validate_list_waiting(waiting: dict[str, Any]) -> str | None:
         set(waiting) != {"tickets"}
         or not isinstance(waiting["tickets"], list)
         or any(
-            not isinstance(ticket, str) or not ticket
-            for ticket in waiting["tickets"]
+            not isinstance(ticket, str) or not ticket for ticket in waiting["tickets"]
         )
     ):
         return "invalid list-waiting output: expected tickets"
@@ -648,7 +643,9 @@ def can_transition_command(ctx: click.Context, ticket: str, to_state: str) -> No
 @click.argument("to_state")
 @click.argument("token")
 @click.pass_context
-def transition_command(ctx: click.Context, ticket: str, to_state: str, token: str) -> None:
+def transition_command(
+    ctx: click.Context, ticket: str, to_state: str, token: str
+) -> None:
     """Move a ticket to a wait state."""
     transition(ticket, to_state, token, ctx.obj["run_hook"])
 

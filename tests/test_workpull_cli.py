@@ -20,12 +20,13 @@ class Outcome(TypedDict):
     help_text: str
 
 
-def test_top_level_help_lists_commands(runner: CliRunner, normalize_help: NormalizeHelp) -> None:
+def test_top_level_help_lists_commands(
+    runner: CliRunner, normalize_help: NormalizeHelp
+) -> None:
     # GIVEN
     expected: Outcome = {
         "exit_code": 0,
-        "help_text": normalize_help(
-            """Usage: cli [OPTIONS] COMMAND [ARGS]...
+        "help_text": normalize_help("""Usage: cli [OPTIONS] COMMAND [ARGS]...
 
             Workpull: describe a backend's states and transitions.
 
@@ -47,8 +48,7 @@ def test_top_level_help_lists_commands(runner: CliRunner, normalize_help: Normal
               prioritize    Move a ticket to a new priority.
               release       Release a ticket's claim.
               transition    Move a ticket to a wait state.
-            """
-        ),
+            """),
     }
     # WHEN
     result = runner.invoke(cli, ["--help"])

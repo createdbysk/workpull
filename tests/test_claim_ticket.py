@@ -41,7 +41,7 @@ def write_mock_hook(ticket_id: str, token: str, hook_command: HookCommand) -> st
         "    sys.exit(1)\n"
         "if {key for key in os.environ if key.startswith('WORKPULL_')} != {'WORKPULL_STATE'}:\n"
         "    sys.exit(1)\n"
-        f"sys.stdout.write('ticket = \"{ticket_id}\"\\ntoken = \"{token}\"\\n')\n"
+        f'sys.stdout.write(\'ticket = "{ticket_id}"\\ntoken = "{token}"\\n\')\n'
     )
     return hook_command("mock_claim_ticket.py")
 
@@ -76,7 +76,9 @@ def run_claim_ticket(runner: CliRunner) -> RunClaimTicket:
 
 
 @pytest.mark.parametrize("ticket_id", ["ticket-1", "0"])
-def test_claim_ticket_happy_path(run_claim_ticket: RunClaimTicket, ticket_id: str) -> None:
+def test_claim_ticket_happy_path(
+    run_claim_ticket: RunClaimTicket, ticket_id: str
+) -> None:
     # GIVEN
     expected: ClaimOutcome = {
         "exit_code": 0,
@@ -122,7 +124,11 @@ def test_claim_ticket_reversed_output_is_forwarded_verbatim(
     assert expected == actual
 
 
-def test_claim_ticket_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
+def test_claim_ticket_real_hook(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
     # GIVEN
     expected: ClaimOutcome = {
         "exit_code": 0,
@@ -222,15 +228,13 @@ def test_claim_ticket_help(runner: CliRunner, normalize_help: NormalizeHelp) -> 
     # GIVEN
     expected: HelpOutcome = {
         "exit_code": 0,
-        "help_text": normalize_help(
-            """Usage: cli claim-ticket [OPTIONS] STATE
+        "help_text": normalize_help("""Usage: cli claim-ticket [OPTIONS] STATE
 
             Claim a single ticket in a state.
 
             Options:
               --help  Show this message and exit.
-            """
-        ),
+            """),
     }
     # WHEN
     result = runner.invoke(cli, ["claim-ticket", "--help"])

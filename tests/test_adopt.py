@@ -84,7 +84,11 @@ def test_adopt_happy_path(run_adopt: RunAdopt, ticket_id: str) -> None:
     assert expected == actual
 
 
-def test_adopt_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
+def test_adopt_real_hook(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
     # GIVEN
     expected: TicketOutcome = {"exit_code": 0, "ticket_id": "ticket-1"}
     # WHEN
@@ -139,15 +143,13 @@ def test_adopt_help(runner: CliRunner, normalize_help: NormalizeHelp) -> None:
     # GIVEN
     expected: HelpOutcome = {
         "exit_code": 0,
-        "help_text": normalize_help(
-            """Usage: cli adopt [OPTIONS] TICKET
+        "help_text": normalize_help("""Usage: cli adopt [OPTIONS] TICKET
 
             Adopt a ticket.
 
             Options:
               --help  Show this message and exit.
-            """
-        ),
+            """),
     }
     # WHEN
     result = runner.invoke(cli, ["adopt", "--help"])

@@ -27,7 +27,9 @@ as missing, do not pivot to another toolchain or language.
   dev dependency in `pyproject.toml` (`pip install -e ".[dev]"`).
   Lint also runs Ruff, declared as a dev dependency in
   `pyproject.toml` with its config there, checking that Python
-  sources follow the spacing conventions.
+  sources follow the spacing conventions, and Black, declared
+  as a dev dependency there, checking that Python sources are
+  Black-formatted.
 - Type check: pyrefly, config in `pyrefly.toml`, declared as a
   dev dependency in `pyproject.toml`. Code uses type hints.
 - Skill files use YAML frontmatter.

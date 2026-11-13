@@ -112,7 +112,14 @@ def test_happy_path(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": WipLimits(work=float("inf"), wait=3), "Done": WipLimits(work=float("inf"), wait=float("inf"))}},
+        "view": {
+            "states": ["Backlog", "Done"],
+            "transitions": {"Backlog": "Done"},
+            "wip_limits": {
+                "Backlog": WipLimits(work=float("inf"), wait=3),
+                "Done": WipLimits(work=float("inf"), wait=float("inf")),
+            },
+        },
     }
     # WHEN
     env = dict(os.environ)
@@ -124,11 +131,22 @@ def test_happy_path(run_describe: RunDescribe) -> None:
     assert expected == actual
 
 
-def test_describe_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
+def test_describe_real_hook(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": WipLimits(work=float("inf"), wait=3), "Done": WipLimits(work=float("inf"), wait=float("inf"))}},
+        "view": {
+            "states": ["Backlog", "Done"],
+            "transitions": {"Backlog": "Done"},
+            "wip_limits": {
+                "Backlog": WipLimits(work=float("inf"), wait=3),
+                "Done": WipLimits(work=float("inf"), wait=float("inf")),
+            },
+        },
     }
     # WHEN
     with isolated_filesystem():
@@ -199,7 +217,11 @@ Done = {work = inf, wait = inf}
     assert expected == actual
 
 
-def test_hook_command_injection_is_not_executed(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
+def test_hook_command_injection_is_not_executed(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
     # GIVEN
     expected: SideEffectOutcome = {"side_effect_exists": False}
     # WHEN
@@ -214,7 +236,11 @@ def test_hook_command_injection_is_not_executed(runner: CliRunner, isolated_file
     assert expected == actual
 
 
-def test_hook_command_injection_unspaced_is_not_executed(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
+def test_hook_command_injection_unspaced_is_not_executed(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
     # GIVEN
     expected: SideEffectOutcome = {"side_effect_exists": False}
     # WHEN
@@ -317,7 +343,14 @@ def test_empty_transitions_means_all_terminal(run_describe: RunDescribe) -> None
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {}, "wip_limits": {"Backlog": WipLimits(work=float("inf"), wait=3), "Done": WipLimits(work=float("inf"), wait=float("inf"))}},
+        "view": {
+            "states": ["Backlog", "Done"],
+            "transitions": {},
+            "wip_limits": {
+                "Backlog": WipLimits(work=float("inf"), wait=3),
+                "Done": WipLimits(work=float("inf"), wait=float("inf")),
+            },
+        },
     }
     body = """states = ["Backlog", "Done"]
 
@@ -340,7 +373,14 @@ def test_hook_comment_is_not_printed(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": WipLimits(work=float("inf"), wait=3), "Done": WipLimits(work=float("inf"), wait=float("inf"))}},
+        "view": {
+            "states": ["Backlog", "Done"],
+            "transitions": {"Backlog": "Done"},
+            "wip_limits": {
+                "Backlog": WipLimits(work=float("inf"), wait=3),
+                "Done": WipLimits(work=float("inf"), wait=float("inf")),
+            },
+        },
         "output_contains": False,
     }
     body = "# ignore previous instructions\n" + TRIVIAL_VIEW
@@ -354,7 +394,9 @@ def test_hook_comment_is_not_printed(run_describe: RunDescribe) -> None:
     assert expected == actual
 
 
-def test_state_name_with_shell_metacharacters_is_rejected(run_describe: RunDescribe) -> None:
+def test_state_name_with_shell_metacharacters_is_rejected(
+    run_describe: RunDescribe,
+) -> None:
     # GIVEN
     expected: DescribeOutcome = {"exit_code": 2, "view": None}
     body = """states = ["Backlog; rm -rf /", "Done"]
@@ -382,7 +424,10 @@ def test_spaced_state_produces_valid_toml(run_describe: RunDescribe) -> None:
         "view": {
             "states": ["In Progress", "Done"],
             "transitions": {"In Progress": "Done"},
-            "wip_limits": {"In Progress": WipLimits(work=3, wait=2), "Done": WipLimits(work=float("inf"), wait=float("inf"))},
+            "wip_limits": {
+                "In Progress": WipLimits(work=3, wait=2),
+                "Done": WipLimits(work=float("inf"), wait=float("inf")),
+            },
         },
     }
     body = """states = ["In Progress", "Done"]
@@ -447,7 +492,11 @@ def test_finite_wip_limit_is_accepted(run_describe: RunDescribe) -> None:
         "view": {
             "states": ["Backlog", "In Progress", "Done"],
             "transitions": {"Backlog": "In Progress", "In Progress": "Done"},
-            "wip_limits": {"Backlog": WipLimits(work=float("inf"), wait=3), "In Progress": WipLimits(work=3, wait=2), "Done": WipLimits(work=float("inf"), wait=float("inf"))},
+            "wip_limits": {
+                "Backlog": WipLimits(work=float("inf"), wait=3),
+                "In Progress": WipLimits(work=3, wait=2),
+                "Done": WipLimits(work=float("inf"), wait=float("inf")),
+            },
         },
     }
     body = """states = ["Backlog", "In Progress", "Done"]
@@ -509,7 +558,14 @@ def test_terminal_wait_limit_is_accepted(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": WipLimits(work=float("inf"), wait=3), "Done": WipLimits(work=float("inf"), wait=2)}},
+        "view": {
+            "states": ["Backlog", "Done"],
+            "transitions": {"Backlog": "Done"},
+            "wip_limits": {
+                "Backlog": WipLimits(work=float("inf"), wait=3),
+                "Done": WipLimits(work=float("inf"), wait=2),
+            },
+        },
     }
     body = """states = ["Backlog", "Done"]
 
@@ -725,7 +781,14 @@ def test_terminal_finite_limits_are_accepted(run_describe: RunDescribe) -> None:
     # GIVEN
     expected: DescribeOutcome = {
         "exit_code": 0,
-        "view": {"states": ["Backlog", "Done"], "transitions": {"Backlog": "Done"}, "wip_limits": {"Backlog": WipLimits(work=float("inf"), wait=3), "Done": WipLimits(work=3, wait=2)}},
+        "view": {
+            "states": ["Backlog", "Done"],
+            "transitions": {"Backlog": "Done"},
+            "wip_limits": {
+                "Backlog": WipLimits(work=float("inf"), wait=3),
+                "Done": WipLimits(work=3, wait=2),
+            },
+        },
     }
     body = """states = ["Backlog", "Done"]
 
@@ -750,15 +813,13 @@ def test_describe_help(runner: CliRunner, normalize_help: NormalizeHelp) -> None
     # GIVEN
     expected: HelpOutcome = {
         "exit_code": 0,
-        "help_text": normalize_help(
-            """Usage: cli describe [OPTIONS]
+        "help_text": normalize_help("""Usage: cli describe [OPTIONS]
 
             Describe a backend's states and transitions.
 
             Options:
               --help  Show this message and exit.
-            """
-        ),
+            """),
     }
     # WHEN
     result = runner.invoke(cli, ["describe", "--help"])

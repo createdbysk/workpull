@@ -66,6 +66,7 @@ def run_cli() -> RunCli:
             text=True,
             timeout=30,
         )
+
     return _run
 
 
@@ -73,7 +74,14 @@ def test_cli_via_github_adapter(run_cli: RunCli) -> None:
     # GIVEN
     expected: Outcome = {
         "exit_code": 0,
-        "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": WipLimits(work=float("inf"), wait=3), "Closed": WipLimits(work=float("inf"), wait=float("inf"))}},
+        "view": {
+            "states": ["Open", "Closed"],
+            "transitions": {"Open": "Closed"},
+            "wip_limits": {
+                "Open": WipLimits(work=float("inf"), wait=3),
+                "Closed": WipLimits(work=float("inf"), wait=float("inf")),
+            },
+        },
     }
     env = dict(os.environ)
     env["DESCRIBE_HOOK"] = f"{Path(sys.executable).as_posix()} {ADAPTER.as_posix()}"
@@ -91,7 +99,14 @@ def test_adapter_direct_output_is_exact() -> None:
     # GIVEN
     expected: Outcome = {
         "exit_code": 0,
-        "view": {"states": ["Open", "Closed"], "transitions": {"Open": "Closed"}, "wip_limits": {"Open": WipLimits(work=float("inf"), wait=3), "Closed": WipLimits(work=float("inf"), wait=float("inf"))}},
+        "view": {
+            "states": ["Open", "Closed"],
+            "transitions": {"Open": "Closed"},
+            "wip_limits": {
+                "Open": WipLimits(work=float("inf"), wait=3),
+                "Closed": WipLimits(work=float("inf"), wait=float("inf")),
+            },
+        },
         "output_contains": False,
     }
     # WHEN

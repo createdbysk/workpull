@@ -240,9 +240,7 @@ def write_mock_backend(
     hook_command: HookCommand, initial_state: MockBackendState
 ) -> MockBackendHooks:
     """Write the mock backend script with the default describe view."""
-    return write_mock_backend_with_describe(
-        hook_command, initial_state, DESCRIBE_VIEW
-    )
+    return write_mock_backend_with_describe(hook_command, initial_state, DESCRIBE_VIEW)
 
 
 class MockBackendEnvRejectionCase(NamedTuple):
@@ -374,7 +372,9 @@ def test_mock_backend_rejects_extra_workpull_env(
     with isolated_filesystem():
         hooks = write_mock_backend(hook_command, initial_state)
         env = {
-            key: value for key, value in os.environ.items() if not key.startswith("WORKPULL_")
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("WORKPULL_")
         }
         env.update(case.env_vars)
         probe = subprocess.run(
@@ -453,7 +453,9 @@ def test_mock_backend_error_branches_exit_1(
     with isolated_filesystem():
         hooks = write_mock_backend(hook_command, initial_state)
         env = {
-            key: value for key, value in os.environ.items() if not key.startswith("WORKPULL_")
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("WORKPULL_")
         }
         env.update(case.env_vars)
         probe = subprocess.run(
@@ -580,7 +582,10 @@ def test_component_transition_pull_after_event_9(
         env["LIST_WAITING_HOOK"] = hooks.list_waiting
         claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
         transition = runner.invoke(
-            cli, ["transition", "ticket-1", "In Progress", "token-ticket-1"], env=env, obj={}
+            cli,
+            ["transition", "ticket-1", "In Progress", "token-ticket-1"],
+            env=env,
+            obj={},
         )
         waiting_state = runner.invoke(cli, ["get-state", "ticket-1"], env=env, obj={})
         pulled_state = runner.invoke(cli, ["get-state", "ticket-5"], env=env, obj={})
@@ -695,7 +700,9 @@ def test_component_transition_with_another_ticket_token_does_not_move(
     assert first_claim.exception is None
     assert first_claim.output.strip() == 'ticket = "ticket-1"\ntoken = "token-ticket-1"'
     assert second_claim.exception is None
-    assert second_claim.output.strip() == 'ticket = "ticket-2"\ntoken = "token-ticket-2"'
+    assert (
+        second_claim.output.strip() == 'ticket = "ticket-2"\ntoken = "token-ticket-2"'
+    )
     assert transition.exit_code == 1
     assert transition.output.strip() == ""
     assert state == MockBackendState(
@@ -973,7 +980,10 @@ def test_component_transition_capacity(
         env["SYSTEM_MOVE_HOOK"] = hooks.system_move
         claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
         transition = runner.invoke(
-            cli, ["transition", "ticket-1", "In Progress", "token-ticket-1"], env=env, obj={}
+            cli,
+            ["transition", "ticket-1", "In Progress", "token-ticket-1"],
+            env=env,
+            obj={},
         )
         final_state = runner.invoke(cli, ["get-state", "ticket-1"], env=env, obj={})
         final_count = runner.invoke(cli, ["count", "In Progress"], env=env, obj={})

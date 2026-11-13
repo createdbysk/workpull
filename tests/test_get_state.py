@@ -119,7 +119,11 @@ def test_get_state_empty_state(run_get_state: RunGetState) -> None:
     assert expected == actual
 
 
-def test_get_state_real_hook(runner: CliRunner, isolated_filesystem: IsolatedFilesystem, hook_command: HookCommand) -> None:
+def test_get_state_real_hook(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
     # GIVEN
     expected: StateOutcome = {"exit_code": 0, "state": "In Progress"}
     # WHEN
@@ -138,15 +142,13 @@ def test_get_state_help(runner: CliRunner, normalize_help: NormalizeHelp) -> Non
     # GIVEN
     expected: HelpOutcome = {
         "exit_code": 0,
-        "help_text": normalize_help(
-            """Usage: cli get-state [OPTIONS] TICKET
+        "help_text": normalize_help("""Usage: cli get-state [OPTIONS] TICKET
 
             Get a ticket's current state.
 
             Options:
               --help  Show this message and exit.
-            """
-        ),
+            """),
     }
     # WHEN
     result = runner.invoke(cli, ["get-state", "--help"])
