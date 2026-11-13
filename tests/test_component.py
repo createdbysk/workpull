@@ -29,6 +29,7 @@ class MockBackendTicket(NamedTuple):
 
 class MockBackendState(NamedTuple):
     tickets: tuple[MockBackendTicket, ...]
+    unadopted: tuple[str, ...]
 
 
 class MockBackendHooks(NamedTuple):
@@ -39,6 +40,10 @@ class MockBackendHooks(NamedTuple):
     transition: str
     system_move: str
     list_waiting: str
+    release: str
+    discard: str
+    adopt: str
+    prioritize: str
 
 
 class ComponentTransitionCase(NamedTuple):
@@ -87,6 +92,7 @@ Done = {work = inf, wait = inf}
 _MOCK_BACKEND_SCRIPT = r"""import json
 import os
 import sys
+import tomllib
 from pathlib import Path
 
 STATE_PATH = Path("mock_backend_state.json")
@@ -106,6 +112,11 @@ def find_ticket(state, ticket_id):
         if ticket["ticket"] == ticket_id:
             return ticket
     return None
+
+
+def priority_key(number):
+    digits = str(number)
+    return chr(ord("a") + len(digits) - 1) + digits
 
 
 def check_env(expected):
@@ -187,6 +198,66 @@ def main():
         ticket["waiting_for"] = None
         save_state(state)
         sys.stdout.write(ticket["ticket"] + "\n")
+    elif hook == "release":
+        check_env({"WORKPULL_TICKET", "WORKPULL_TOKEN"})
+        ticket = find_ticket(state, os.environ["WORKPULL_TICKET"])
+        if ticket is None or ticket["token"] != os.environ["WORKPULL_TOKEN"]:
+            sys.exit(1)
+        ticket["token"] = None
+        save_state(state)
+        sys.stdout.write(ticket["ticket"] + "\n")
+    elif hook == "discard":
+        check_env({"WORKPULL_TICKET", "WORKPULL_TOKEN"})
+        ticket = find_ticket(state, os.environ["WORKPULL_TICKET"])
+        if ticket is None or ticket["token"] != os.environ["WORKPULL_TOKEN"]:
+            sys.exit(1)
+        state["tickets"].remove(ticket)
+        save_state(state)
+        sys.stdout.write(ticket["ticket"] + "\n")
+    elif hook == "adopt":
+        check_env({"WORKPULL_TICKET"})
+        ticket_id = os.environ["WORKPULL_TICKET"]
+        if ticket_id not in state["unadopted"]:
+            sys.exit(1)
+        state["unadopted"].remove(ticket_id)
+        first_state = tomllib.loads(DESCRIBE_VIEW)["states"][0]
+        priority = priority_key(state["next_adopt_key"])
+        state["next_adopt_key"] += 1
+        state["tickets"].append(
+            {
+                "ticket": ticket_id,
+                "state": first_state,
+                "priority": priority,
+                "token": None,
+                "waiting_for": None,
+            }
+        )
+        save_state(state)
+        sys.stdout.write(ticket_id + "\n")
+    elif hook == "prioritize":
+        check_env({"WORKPULL_TICKET", "WORKPULL_AFTER"})
+        ticket = find_ticket(state, os.environ["WORKPULL_TICKET"])
+        if ticket is None:
+            sys.exit(1)
+        after = os.environ["WORKPULL_AFTER"]
+        ordered = sorted(
+            (item for item in state["tickets"] if item is not ticket),
+            key=lambda item: item["priority"],
+        )
+        if after == "WORKPULL_TOP":
+            ordered.insert(0, ticket)
+        else:
+            anchor = find_ticket(state, after)
+            if anchor is None or anchor is ticket:
+                sys.exit(1)
+            position = next(
+                index for index, item in enumerate(ordered) if item is anchor
+            )
+            ordered.insert(position + 1, ticket)
+        for index, item in enumerate(ordered):
+            item["priority"] = priority_key(index)
+        save_state(state)
+        sys.stdout.write(ticket["ticket"] + "\n")
     else:
         sys.exit(1)
 
@@ -221,7 +292,9 @@ def write_mock_backend_with_describe(
                         "waiting_for": ticket.waiting_for,
                     }
                     for ticket in initial_state.tickets
-                ]
+                ],
+                "unadopted": list(initial_state.unadopted),
+                "next_adopt_key": _initial_next_adopt_key(initial_state),
             }
         )
     )
@@ -233,7 +306,27 @@ def write_mock_backend_with_describe(
         transition=hook_command("mock_backend.py transition"),
         system_move=hook_command("mock_backend.py system-move"),
         list_waiting=hook_command("mock_backend.py list-waiting"),
+        release=hook_command("mock_backend.py release"),
+        discard=hook_command("mock_backend.py discard"),
+        adopt=hook_command("mock_backend.py adopt"),
+        prioritize=hook_command("mock_backend.py prioritize"),
     )
+
+
+def _initial_next_adopt_key(initial_state: MockBackendState) -> int:
+    """The adopt key counter starts after every key already issued.
+
+    The counter lives in the state file, not in the named
+    state, because it is backend bookkeeping: an adopted
+    ticket's key must come after every key ever issued,
+    even a key whose ticket was later discarded.
+    """
+    suffixes = [
+        int(ticket.priority[1:])
+        for ticket in initial_state.tickets
+        if ticket.priority[1:].isdigit()
+    ]
+    return max(suffixes, default=-1) + 1
 
 
 def write_mock_backend(
@@ -261,13 +354,13 @@ def _mock_backend_env_rejection_case_id(case: MockBackendEnvRejectionCase) -> st
             case_name="describe",
             hook_name="describe",
             env_vars={"WORKPULL_EXTRA": "1"},
-            initial_state=MockBackendState(tickets=()),
+            initial_state=MockBackendState(tickets=(), unadopted=()),
         ),
         MockBackendEnvRejectionCase(
             case_name="count",
             hook_name="count",
             env_vars={"WORKPULL_STATE": "Backlog", "WORKPULL_EXTRA": "1"},
-            initial_state=MockBackendState(tickets=()),
+            initial_state=MockBackendState(tickets=(), unadopted=()),
         ),
         MockBackendEnvRejectionCase(
             case_name="get_state",
@@ -282,7 +375,8 @@ def _mock_backend_env_rejection_case_id(case: MockBackendEnvRejectionCase) -> st
                         token=None,
                         waiting_for=None,
                     ),
-                )
+                ),
+                unadopted=(),
             ),
         ),
         MockBackendEnvRejectionCase(
@@ -298,7 +392,8 @@ def _mock_backend_env_rejection_case_id(case: MockBackendEnvRejectionCase) -> st
                         token=None,
                         waiting_for=None,
                     ),
-                )
+                ),
+                unadopted=(),
             ),
         ),
         MockBackendEnvRejectionCase(
@@ -319,7 +414,8 @@ def _mock_backend_env_rejection_case_id(case: MockBackendEnvRejectionCase) -> st
                         token="token-ticket-1",
                         waiting_for=None,
                     ),
-                )
+                ),
+                unadopted=(),
             ),
         ),
         MockBackendEnvRejectionCase(
@@ -339,7 +435,8 @@ def _mock_backend_env_rejection_case_id(case: MockBackendEnvRejectionCase) -> st
                         token=None,
                         waiting_for="In Progress",
                     ),
-                )
+                ),
+                unadopted=(),
             ),
         ),
         MockBackendEnvRejectionCase(
@@ -355,7 +452,84 @@ def _mock_backend_env_rejection_case_id(case: MockBackendEnvRejectionCase) -> st
                         token=None,
                         waiting_for="In Progress",
                     ),
-                )
+                ),
+                unadopted=(),
+            ),
+        ),
+        MockBackendEnvRejectionCase(
+            case_name="release",
+            hook_name="release",
+            env_vars={
+                "WORKPULL_TICKET": "ticket-1",
+                "WORKPULL_TOKEN": "token-ticket-1",
+                "WORKPULL_EXTRA": "1",
+            },
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token="token-ticket-1",
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+        ),
+        MockBackendEnvRejectionCase(
+            case_name="discard",
+            hook_name="discard",
+            env_vars={
+                "WORKPULL_TICKET": "ticket-1",
+                "WORKPULL_TOKEN": "token-ticket-1",
+                "WORKPULL_EXTRA": "1",
+            },
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token="token-ticket-1",
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+        ),
+        MockBackendEnvRejectionCase(
+            case_name="adopt",
+            hook_name="adopt",
+            env_vars={"WORKPULL_TICKET": "ticket-9", "WORKPULL_EXTRA": "1"},
+            initial_state=MockBackendState(tickets=(), unadopted=("ticket-9",)),
+        ),
+        MockBackendEnvRejectionCase(
+            case_name="prioritize",
+            hook_name="prioritize",
+            env_vars={
+                "WORKPULL_TICKET": "ticket-1",
+                "WORKPULL_AFTER": "ticket-2",
+                "WORKPULL_EXTRA": "1",
+            },
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="Backlog",
+                        priority="a1",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
             ),
         ),
     ],
@@ -406,13 +580,13 @@ def _mock_backend_error_case_id(case: MockBackendErrorCase) -> str:
             case_name="get_state_unknown_ticket",
             hook_name="get-state",
             env_vars={"WORKPULL_TICKET": "ticket-9"},
-            initial_state=MockBackendState(tickets=()),
+            initial_state=MockBackendState(tickets=(), unadopted=()),
         ),
         MockBackendErrorCase(
             case_name="claim_ticket_no_unclaimed_ticket",
             hook_name="claim-ticket",
             env_vars={"WORKPULL_STATE": "Backlog"},
-            initial_state=MockBackendState(tickets=()),
+            initial_state=MockBackendState(tickets=(), unadopted=()),
         ),
         MockBackendErrorCase(
             case_name="system_move_ticket_not_waiting_for_to_state",
@@ -430,14 +604,15 @@ def _mock_backend_error_case_id(case: MockBackendErrorCase) -> str:
                         token=None,
                         waiting_for=None,
                     ),
-                )
+                ),
+                unadopted=(),
             ),
         ),
         MockBackendErrorCase(
             case_name="unknown_hook_name",
             hook_name="bogus",
             env_vars={},
-            initial_state=MockBackendState(tickets=()),
+            initial_state=MockBackendState(tickets=(), unadopted=()),
         ),
     ],
     ids=_mock_backend_error_case_id,
@@ -482,7 +657,38 @@ def read_mock_backend_state() -> MockBackendState:
                 waiting_for=ticket["waiting_for"],
             )
             for ticket in raw["tickets"]
-        )
+        ),
+        unadopted=tuple(raw["unadopted"]),
+    )
+
+
+def test_component_describe_prints_mock_backend_view(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(tickets=(), unadopted=())
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["DESCRIBE_HOOK"] = hooks.describe
+        result = runner.invoke(cli, ["describe"], env=env, obj={})
+    # THEN
+    assert result.exception is None
+    assert result.output.strip() == (
+        'states = ["Backlog", "In Progress", "In Work", "Done"]\n'
+        "\n"
+        "[transitions]\n"
+        '"Backlog" = "In Progress"\n'
+        '"In Progress" = "Done"\n'
+        "\n"
+        "[wip_limits]\n"
+        '"Backlog" = {work = inf, wait = 3}\n'
+        '"In Progress" = {work = 3, wait = 2}\n'
+        '"In Work" = {work = 3, wait = 2}\n'
+        '"Done" = {work = inf, wait = inf}'
     )
 
 
@@ -508,7 +714,8 @@ def test_component_count_of_waiting_ticket_counts_work_in_left_state(
                 token=None,
                 waiting_for=None,
             ),
-        )
+        ),
+        unadopted=(),
     )
     # WHEN
     with isolated_filesystem():
@@ -567,7 +774,8 @@ def test_component_transition_pull_after_event_9(
                 token=None,
                 waiting_for="Backlog",
             ),
-        )
+        ),
+        unadopted=(),
     )
     # WHEN
     with isolated_filesystem():
@@ -642,7 +850,8 @@ def test_component_transition_pull_after_event_9(
                 token=None,
                 waiting_for=None,
             ),
-        )
+        ),
+        unadopted=(),
     )
 
 
@@ -675,7 +884,8 @@ def test_component_transition_with_another_ticket_token_does_not_move(
                 token=None,
                 waiting_for=None,
             ),
-        )
+        ),
+        unadopted=(),
     )
     # WHEN
     with isolated_filesystem():
@@ -728,7 +938,8 @@ def test_component_transition_with_another_ticket_token_does_not_move(
                 token=None,
                 waiting_for=None,
             ),
-        )
+        ),
+        unadopted=(),
     )
 
 
@@ -747,7 +958,8 @@ def test_component_get_state_of_waiting_ticket_returns_waiting_for_state(
                 token=None,
                 waiting_for="In Progress",
             ),
-        )
+        ),
+        unadopted=(),
     )
     # WHEN
     with isolated_filesystem():
@@ -792,7 +1004,8 @@ def _component_transition_case_id(case: ComponentTransitionCase) -> str:
                         token=None,
                         waiting_for=None,
                     ),
-                )
+                ),
+                unadopted=(),
             ),
             expected_count_output="wait = 0\nwork = 3",
             expected_final_state=MockBackendState(
@@ -818,7 +1031,8 @@ def _component_transition_case_id(case: ComponentTransitionCase) -> str:
                         token=None,
                         waiting_for=None,
                     ),
-                )
+                ),
+                unadopted=(),
             ),
         ),
         ComponentTransitionCase(
@@ -853,7 +1067,8 @@ def _component_transition_case_id(case: ComponentTransitionCase) -> str:
                         token=None,
                         waiting_for=None,
                     ),
-                )
+                ),
+                unadopted=(),
             ),
             expected_count_output="wait = 1\nwork = 3",
             expected_final_state=MockBackendState(
@@ -886,7 +1101,8 @@ def _component_transition_case_id(case: ComponentTransitionCase) -> str:
                         token=None,
                         waiting_for=None,
                     ),
-                )
+                ),
+                unadopted=(),
             ),
         ),
         ComponentTransitionCase(
@@ -921,7 +1137,8 @@ def _component_transition_case_id(case: ComponentTransitionCase) -> str:
                         token=None,
                         waiting_for="Done",
                     ),
-                )
+                ),
+                unadopted=(),
             ),
             expected_count_output="wait = 1\nwork = 3",
             expected_final_state=MockBackendState(
@@ -954,7 +1171,8 @@ def _component_transition_case_id(case: ComponentTransitionCase) -> str:
                         token=None,
                         waiting_for="Done",
                     ),
-                )
+                ),
+                unadopted=(),
             ),
         ),
     ],
@@ -1039,7 +1257,8 @@ def _component_pull_case_id(case: ComponentPullCase) -> str:
                         token=None,
                         waiting_for="In Progress",
                     ),
-                )
+                ),
+                unadopted=(),
             ),
             list_waiting_hook_set=True,
             expected_ticket_3_state_output="In Progress",
@@ -1074,7 +1293,8 @@ def _component_pull_case_id(case: ComponentPullCase) -> str:
                         token=None,
                         waiting_for="In Progress",
                     ),
-                )
+                ),
+                unadopted=(),
             ),
         ),
         ComponentPullCase(
@@ -1102,7 +1322,8 @@ def _component_pull_case_id(case: ComponentPullCase) -> str:
                         token=None,
                         waiting_for="In Progress",
                     ),
-                )
+                ),
+                unadopted=(),
             ),
             list_waiting_hook_set=False,
             expected_ticket_3_state_output="In Progress",
@@ -1130,7 +1351,8 @@ def _component_pull_case_id(case: ComponentPullCase) -> str:
                         token=None,
                         waiting_for="In Progress",
                     ),
-                )
+                ),
+                unadopted=(),
             ),
         ),
     ],
@@ -1226,7 +1448,8 @@ def test_component_transition_three_step_cascade_pulls_backwards(
                 token=None,
                 waiting_for="Backlog",
             ),
-        )
+        ),
+        unadopted=(),
     )
     # WHEN
     with isolated_filesystem():
@@ -1315,7 +1538,8 @@ def test_component_transition_three_step_cascade_pulls_backwards(
                 token=None,
                 waiting_for=None,
             ),
-        )
+        ),
+        unadopted=(),
     )
 
 
@@ -1376,7 +1600,8 @@ def test_component_transition_cascade_second_pull_at_limit_leaves_first_pull_app
                 token=None,
                 waiting_for=None,
             ),
-        )
+        ),
+        unadopted=(),
     )
     # WHEN
     with isolated_filesystem():
@@ -1476,5 +1701,1678 @@ def test_component_transition_cascade_second_pull_at_limit_leaves_first_pull_app
                 token=None,
                 waiting_for=None,
             ),
-        )
+        ),
+        unadopted=(),
     )
+
+
+def test_component_discard_removes_claimed_ticket_and_its_wip(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="In Progress",
+                priority="a1",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["COUNT_HOOK"] = hooks.count
+        env["GET_STATE_HOOK"] = hooks.get_state
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["DISCARD_HOOK"] = hooks.discard
+        claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        discard = runner.invoke(
+            cli,
+            ["discard", "ticket-1", "token-ticket-1"],
+            env=env,
+            obj={},
+        )
+        discarded_state = runner.invoke(cli, ["get-state", "ticket-1"], env=env, obj={})
+        backlog_count = runner.invoke(cli, ["count", "Backlog"], env=env, obj={})
+        in_progress_count = runner.invoke(
+            cli, ["count", "In Progress"], env=env, obj={}
+        )
+        state = read_mock_backend_state()
+    # THEN
+    assert claim.exception is None
+    assert claim.output.strip() == 'ticket = "ticket-1"\ntoken = "token-ticket-1"'
+    assert discard.exception is None
+    assert discard.output.strip() == "ticket-1"
+    assert discarded_state.exit_code == 1
+    assert discarded_state.output.strip() == ""
+    assert backlog_count.exception is None
+    assert backlog_count.output.strip() == "wait = 0\nwork = 0"
+    assert in_progress_count.exception is None
+    assert in_progress_count.output.strip() == "wait = 0\nwork = 2"
+    assert state == MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="In Progress",
+                priority="a1",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+
+
+def test_component_discard_makes_token_invalid(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["DESCRIBE_HOOK"] = hooks.describe
+        env["COUNT_HOOK"] = hooks.count
+        env["GET_STATE_HOOK"] = hooks.get_state
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["TRANSITION_HOOK"] = hooks.transition
+        env["SYSTEM_MOVE_HOOK"] = hooks.system_move
+        env["LIST_WAITING_HOOK"] = hooks.list_waiting
+        env["RELEASE_HOOK"] = hooks.release
+        env["DISCARD_HOOK"] = hooks.discard
+        claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        discard = runner.invoke(
+            cli,
+            ["discard", "ticket-1", "token-ticket-1"],
+            env=env,
+            obj={},
+        )
+        release = runner.invoke(
+            cli,
+            ["release", "ticket-1", "token-ticket-1"],
+            env=env,
+            obj={},
+        )
+        transition = runner.invoke(
+            cli,
+            ["transition", "ticket-1", "In Progress", "token-ticket-1"],
+            env=env,
+            obj={},
+        )
+        second_discard = runner.invoke(
+            cli,
+            ["discard", "ticket-1", "token-ticket-1"],
+            env=env,
+            obj={},
+        )
+        state = read_mock_backend_state()
+    # THEN
+    assert claim.exception is None
+    assert claim.output.strip() == 'ticket = "ticket-1"\ntoken = "token-ticket-1"'
+    assert discard.exception is None
+    assert discard.output.strip() == "ticket-1"
+    assert release.exit_code == 1
+    assert release.output.strip() == ""
+    assert transition.exit_code == 1
+    assert transition.output.strip() == ""
+    assert second_discard.exit_code == 1
+    assert second_discard.output.strip() == ""
+    assert state == MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+
+
+def test_component_discard_with_another_tickets_token_keeps_claim(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Backlog",
+                priority="a1",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["DISCARD_HOOK"] = hooks.discard
+        first_claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        second_claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        discard = runner.invoke(
+            cli,
+            ["discard", "ticket-1", "token-ticket-2"],
+            env=env,
+            obj={},
+        )
+        state = read_mock_backend_state()
+    # THEN
+    assert first_claim.exception is None
+    assert first_claim.output.strip() == 'ticket = "ticket-1"\ntoken = "token-ticket-1"'
+    assert second_claim.exception is None
+    assert (
+        second_claim.output.strip() == 'ticket = "ticket-2"\ntoken = "token-ticket-2"'
+    )
+    assert discard.exit_code == 1
+    assert discard.output.strip() == ""
+    assert state == MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token="token-ticket-1",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Backlog",
+                priority="a1",
+                token="token-ticket-2",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+
+
+def test_component_discard_without_claim_fails(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["DISCARD_HOOK"] = hooks.discard
+        discard = runner.invoke(
+            cli,
+            ["discard", "ticket-1", "token-ticket-1"],
+            env=env,
+            obj={},
+        )
+        state = read_mock_backend_state()
+    # THEN
+    assert discard.exit_code == 1
+    assert discard.output.strip() == ""
+    assert state == initial_state
+
+
+def test_component_release_ends_claim_and_ticket_can_be_claimed_again(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["DESCRIBE_HOOK"] = hooks.describe
+        env["COUNT_HOOK"] = hooks.count
+        env["GET_STATE_HOOK"] = hooks.get_state
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["TRANSITION_HOOK"] = hooks.transition
+        env["RELEASE_HOOK"] = hooks.release
+        claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        release = runner.invoke(
+            cli,
+            ["release", "ticket-1", "token-ticket-1"],
+            env=env,
+            obj={},
+        )
+        stale_transition = runner.invoke(
+            cli,
+            ["transition", "ticket-1", "In Progress", "token-ticket-1"],
+            env=env,
+            obj={},
+        )
+        second_claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        ticket_state = runner.invoke(cli, ["get-state", "ticket-1"], env=env, obj={})
+        state = read_mock_backend_state()
+    # THEN
+    assert claim.exception is None
+    assert claim.output.strip() == 'ticket = "ticket-1"\ntoken = "token-ticket-1"'
+    assert release.exception is None
+    assert release.output.strip() == "ticket-1"
+    assert stale_transition.exit_code == 1
+    assert stale_transition.output.strip() == ""
+    assert second_claim.exception is None
+    assert (
+        second_claim.output.strip() == 'ticket = "ticket-1"\ntoken = "token-ticket-1"'
+    )
+    assert ticket_state.exception is None
+    assert ticket_state.output.strip() == "Backlog"
+    assert state == MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token="token-ticket-1",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+
+
+def test_component_release_with_another_tickets_token_keeps_claim(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Backlog",
+                priority="a1",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["RELEASE_HOOK"] = hooks.release
+        first_claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        second_claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        release = runner.invoke(
+            cli,
+            ["release", "ticket-1", "token-ticket-2"],
+            env=env,
+            obj={},
+        )
+        state = read_mock_backend_state()
+    # THEN
+    assert first_claim.exception is None
+    assert first_claim.output.strip() == 'ticket = "ticket-1"\ntoken = "token-ticket-1"'
+    assert second_claim.exception is None
+    assert (
+        second_claim.output.strip() == 'ticket = "ticket-2"\ntoken = "token-ticket-2"'
+    )
+    assert release.exit_code == 1
+    assert release.output.strip() == ""
+    assert state == MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token="token-ticket-1",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Backlog",
+                priority="a1",
+                token="token-ticket-2",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="In Progress",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+
+
+def test_component_release_without_claim_fails(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["RELEASE_HOOK"] = hooks.release
+        release = runner.invoke(
+            cli,
+            ["release", "ticket-1", "token-ticket-1"],
+            env=env,
+            obj={},
+        )
+        state = read_mock_backend_state()
+    # THEN
+    assert release.exit_code == 1
+    assert release.output.strip() == ""
+    assert state == initial_state
+
+
+def test_component_adopt_assigns_first_state_and_lowest_priority(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Backlog",
+                priority="a1",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=("ticket-3",),
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["ADOPT_HOOK"] = hooks.adopt
+        adopt = runner.invoke(cli, ["adopt", "ticket-3"], env=env, obj={})
+        first_claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        second_claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        third_claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        state = read_mock_backend_state()
+    # THEN
+    assert adopt.exception is None
+    assert adopt.output.strip() == "ticket-3"
+    assert first_claim.exception is None
+    assert first_claim.output.strip() == 'ticket = "ticket-1"\ntoken = "token-ticket-1"'
+    assert second_claim.exception is None
+    assert (
+        second_claim.output.strip() == 'ticket = "ticket-2"\ntoken = "token-ticket-2"'
+    )
+    assert third_claim.exception is None
+    assert third_claim.output.strip() == 'ticket = "ticket-3"\ntoken = "token-ticket-3"'
+    assert state == MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token="token-ticket-1",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Backlog",
+                priority="a1",
+                token="token-ticket-2",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="Backlog",
+                priority="a2",
+                token="token-ticket-3",
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+
+
+class ComponentAdoptRejectionCase(NamedTuple):
+    case_name: str
+    initial_state: MockBackendState
+    ticket_id: str
+
+
+def _component_adopt_rejection_case_id(case: ComponentAdoptRejectionCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        ComponentAdoptRejectionCase(
+            case_name="already_adopted",
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+            ticket_id="ticket-1",
+        ),
+        ComponentAdoptRejectionCase(
+            case_name="already_in_progress",
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="In Progress",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+            ticket_id="ticket-1",
+        ),
+    ],
+    ids=_component_adopt_rejection_case_id,
+)
+def test_component_adopt_rejects_ticket_already_in_system(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+    case: ComponentAdoptRejectionCase,
+) -> None:
+    # GIVEN
+    initial_state = case.initial_state
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["ADOPT_HOOK"] = hooks.adopt
+        adopt = runner.invoke(cli, ["adopt", case.ticket_id], env=env, obj={})
+        state = read_mock_backend_state()
+    # THEN
+    assert adopt.exit_code == 1
+    assert adopt.output.strip() == ""
+    assert state == initial_state
+
+
+def test_component_adopt_with_many_tickets_claims_adopted_ticket_last(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Backlog",
+                priority="a1",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="Backlog",
+                priority="a2",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-4",
+                state="Backlog",
+                priority="a3",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-5",
+                state="Backlog",
+                priority="a4",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-6",
+                state="Backlog",
+                priority="a5",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-7",
+                state="Backlog",
+                priority="a6",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-8",
+                state="Backlog",
+                priority="a7",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-9",
+                state="Backlog",
+                priority="a8",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-10",
+                state="Backlog",
+                priority="a9",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-11",
+                state="Backlog",
+                priority="b10",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=("ticket-12",),
+    )
+    expected_claim_order = (
+        "ticket-1",
+        "ticket-2",
+        "ticket-3",
+        "ticket-4",
+        "ticket-5",
+        "ticket-6",
+        "ticket-7",
+        "ticket-8",
+        "ticket-9",
+        "ticket-10",
+        "ticket-11",
+        "ticket-12",
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["ADOPT_HOOK"] = hooks.adopt
+        adopt = runner.invoke(cli, ["adopt", "ticket-12"], env=env, obj={})
+        claims = [
+            runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+            for _ in expected_claim_order
+        ]
+        state = read_mock_backend_state()
+    # THEN
+    assert adopt.exception is None
+    assert adopt.output.strip() == "ticket-12"
+    for claim, ticket_id in zip(claims, expected_claim_order, strict=True):
+        assert claim.exception is None
+        assert (
+            claim.output.strip()
+            == f'ticket = "{ticket_id}"\ntoken = "token-{ticket_id}"'
+        )
+    assert state == MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token="token-ticket-1",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Backlog",
+                priority="a1",
+                token="token-ticket-2",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="Backlog",
+                priority="a2",
+                token="token-ticket-3",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-4",
+                state="Backlog",
+                priority="a3",
+                token="token-ticket-4",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-5",
+                state="Backlog",
+                priority="a4",
+                token="token-ticket-5",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-6",
+                state="Backlog",
+                priority="a5",
+                token="token-ticket-6",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-7",
+                state="Backlog",
+                priority="a6",
+                token="token-ticket-7",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-8",
+                state="Backlog",
+                priority="a7",
+                token="token-ticket-8",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-9",
+                state="Backlog",
+                priority="a8",
+                token="token-ticket-9",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-10",
+                state="Backlog",
+                priority="a9",
+                token="token-ticket-10",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-11",
+                state="Backlog",
+                priority="b10",
+                token="token-ticket-11",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-12",
+                state="Backlog",
+                priority="b11",
+                token="token-ticket-12",
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+
+
+def test_component_adopt_two_tickets_keys_increase_in_adoption_order(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=("ticket-2", "ticket-3"),
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["ADOPT_HOOK"] = hooks.adopt
+        first_adopt = runner.invoke(cli, ["adopt", "ticket-2"], env=env, obj={})
+        second_adopt = runner.invoke(cli, ["adopt", "ticket-3"], env=env, obj={})
+        first_claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        second_claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        third_claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        state = read_mock_backend_state()
+    # THEN
+    assert first_adopt.exception is None
+    assert first_adopt.output.strip() == "ticket-2"
+    assert second_adopt.exception is None
+    assert second_adopt.output.strip() == "ticket-3"
+    assert first_claim.exception is None
+    assert first_claim.output.strip() == 'ticket = "ticket-1"\ntoken = "token-ticket-1"'
+    assert second_claim.exception is None
+    assert (
+        second_claim.output.strip() == 'ticket = "ticket-2"\ntoken = "token-ticket-2"'
+    )
+    assert third_claim.exception is None
+    assert third_claim.output.strip() == 'ticket = "ticket-3"\ntoken = "token-ticket-3"'
+    assert state == MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token="token-ticket-1",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Backlog",
+                priority="a1",
+                token="token-ticket-2",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="Backlog",
+                priority="a2",
+                token="token-ticket-3",
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+
+
+def test_component_adopt_after_discard_of_highest_key_comes_after_every_issued_key(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Backlog",
+                priority="a1",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=("ticket-3",),
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["DISCARD_HOOK"] = hooks.discard
+        env["ADOPT_HOOK"] = hooks.adopt
+        first_claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        second_claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        discard = runner.invoke(
+            cli,
+            ["discard", "ticket-2", "token-ticket-2"],
+            env=env,
+            obj={},
+        )
+        adopt = runner.invoke(cli, ["adopt", "ticket-3"], env=env, obj={})
+        third_claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        state = read_mock_backend_state()
+    # THEN
+    assert first_claim.exception is None
+    assert first_claim.output.strip() == 'ticket = "ticket-1"\ntoken = "token-ticket-1"'
+    assert second_claim.exception is None
+    assert (
+        second_claim.output.strip() == 'ticket = "ticket-2"\ntoken = "token-ticket-2"'
+    )
+    assert discard.exception is None
+    assert discard.output.strip() == "ticket-2"
+    assert adopt.exception is None
+    assert adopt.output.strip() == "ticket-3"
+    assert third_claim.exception is None
+    assert third_claim.output.strip() == 'ticket = "ticket-3"\ntoken = "token-ticket-3"'
+    assert state == MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token="token-ticket-1",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="Backlog",
+                priority="a2",
+                token="token-ticket-3",
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+
+
+class ComponentAdoptSparseSeedCase(NamedTuple):
+    case_name: str
+    initial_state: MockBackendState
+    adopted_ticket_id: str
+    expected_claim_order: tuple[str, ...]
+    expected_final_state: MockBackendState
+
+
+def _component_adopt_sparse_seed_case_id(case: ComponentAdoptSparseSeedCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        ComponentAdoptSparseSeedCase(
+            case_name="seed_at_b10",
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="b10",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=("ticket-2",),
+            ),
+            adopted_ticket_id="ticket-2",
+            expected_claim_order=("ticket-1", "ticket-2"),
+            expected_final_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="b10",
+                        token="token-ticket-1",
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="Backlog",
+                        priority="b11",
+                        token="token-ticket-2",
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+        ),
+        ComponentAdoptSparseSeedCase(
+            case_name="seed_at_b99",
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="b99",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=("ticket-2",),
+            ),
+            adopted_ticket_id="ticket-2",
+            expected_claim_order=("ticket-1", "ticket-2"),
+            expected_final_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="b99",
+                        token="token-ticket-1",
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="Backlog",
+                        priority="c100",
+                        token="token-ticket-2",
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+        ),
+    ],
+    ids=_component_adopt_sparse_seed_case_id,
+)
+def test_component_adopt_from_sparse_seed_claims_adopted_ticket_last(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+    case: ComponentAdoptSparseSeedCase,
+) -> None:
+    # GIVEN
+    initial_state = case.initial_state
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["ADOPT_HOOK"] = hooks.adopt
+        adopt = runner.invoke(cli, ["adopt", case.adopted_ticket_id], env=env, obj={})
+        claims = [
+            runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+            for _ in case.expected_claim_order
+        ]
+        state = read_mock_backend_state()
+    # THEN
+    assert adopt.exception is None
+    assert adopt.output.strip() == case.adopted_ticket_id
+    for claim, ticket_id in zip(claims, case.expected_claim_order, strict=True):
+        assert claim.exception is None
+        assert (
+            claim.output.strip()
+            == f'ticket = "{ticket_id}"\ntoken = "token-{ticket_id}"'
+        )
+    assert state == case.expected_final_state
+
+
+class ComponentPrioritizeCase(NamedTuple):
+    case_name: str
+    initial_state: MockBackendState
+    ticket_id: str
+    after: str
+    expected_claim_output: str
+    expected_final_state: MockBackendState
+
+
+def _component_prioritize_case_id(case: ComponentPrioritizeCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        ComponentPrioritizeCase(
+            case_name="move_after_last_ticket",
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="Backlog",
+                        priority="a1",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-3",
+                        state="Backlog",
+                        priority="a2",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+            ticket_id="ticket-1",
+            after="ticket-3",
+            expected_claim_output='ticket = "ticket-2"\ntoken = "token-ticket-2"',
+            expected_final_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a2",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="Backlog",
+                        priority="a0",
+                        token="token-ticket-2",
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-3",
+                        state="Backlog",
+                        priority="a1",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+        ),
+        ComponentPrioritizeCase(
+            case_name="move_to_top",
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="Backlog",
+                        priority="a1",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-3",
+                        state="Backlog",
+                        priority="a2",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+            ticket_id="ticket-3",
+            after="WORKPULL_TOP",
+            expected_claim_output='ticket = "ticket-3"\ntoken = "token-ticket-3"',
+            expected_final_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a1",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="Backlog",
+                        priority="a2",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-3",
+                        state="Backlog",
+                        priority="a0",
+                        token="token-ticket-3",
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+        ),
+    ],
+    ids=_component_prioritize_case_id,
+)
+def test_component_prioritize_reorders_tickets(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+    case: ComponentPrioritizeCase,
+) -> None:
+    # GIVEN
+    initial_state = case.initial_state
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["PRIORITIZE_HOOK"] = hooks.prioritize
+        prioritize = runner.invoke(
+            cli,
+            ["prioritize", case.ticket_id, case.after],
+            env=env,
+            obj={},
+        )
+        claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        state = read_mock_backend_state()
+    # THEN
+    assert prioritize.exception is None
+    assert prioritize.output.strip() == case.ticket_id
+    assert claim.exception is None
+    assert claim.output.strip() == case.expected_claim_output
+    assert state == case.expected_final_state
+
+
+def test_component_prioritize_with_many_tickets_rebalances_keys_in_priority_order(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Backlog",
+                priority="a1",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="Backlog",
+                priority="a2",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-4",
+                state="Backlog",
+                priority="a3",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-5",
+                state="Backlog",
+                priority="a4",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-6",
+                state="Backlog",
+                priority="a5",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-7",
+                state="Backlog",
+                priority="a6",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-8",
+                state="Backlog",
+                priority="a7",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-9",
+                state="Backlog",
+                priority="a8",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-10",
+                state="Backlog",
+                priority="a9",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-11",
+                state="Backlog",
+                priority="b10",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-12",
+                state="Backlog",
+                priority="b11",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["PRIORITIZE_HOOK"] = hooks.prioritize
+        prioritize = runner.invoke(
+            cli,
+            ["prioritize", "ticket-1", "ticket-12"],
+            env=env,
+            obj={},
+        )
+        claim = runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+        state = read_mock_backend_state()
+    # THEN
+    assert prioritize.exception is None
+    assert prioritize.output.strip() == "ticket-1"
+    assert claim.exception is None
+    assert claim.output.strip() == 'ticket = "ticket-2"\ntoken = "token-ticket-2"'
+    assert state == MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="b11",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Backlog",
+                priority="a0",
+                token="token-ticket-2",
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-3",
+                state="Backlog",
+                priority="a1",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-4",
+                state="Backlog",
+                priority="a2",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-5",
+                state="Backlog",
+                priority="a3",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-6",
+                state="Backlog",
+                priority="a4",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-7",
+                state="Backlog",
+                priority="a5",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-8",
+                state="Backlog",
+                priority="a6",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-9",
+                state="Backlog",
+                priority="a7",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-10",
+                state="Backlog",
+                priority="a8",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-11",
+                state="Backlog",
+                priority="a9",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-12",
+                state="Backlog",
+                priority="b10",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+
+
+def test_component_prioritize_with_unknown_after_ticket_fails(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+) -> None:
+    # GIVEN
+    initial_state = MockBackendState(
+        tickets=(
+            MockBackendTicket(
+                ticket_id="ticket-1",
+                state="Backlog",
+                priority="a0",
+                token=None,
+                waiting_for=None,
+            ),
+            MockBackendTicket(
+                ticket_id="ticket-2",
+                state="Backlog",
+                priority="a1",
+                token=None,
+                waiting_for=None,
+            ),
+        ),
+        unadopted=(),
+    )
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["PRIORITIZE_HOOK"] = hooks.prioritize
+        prioritize = runner.invoke(
+            cli,
+            ["prioritize", "ticket-1", "ticket-9"],
+            env=env,
+            obj={},
+        )
+        state = read_mock_backend_state()
+    # THEN
+    assert prioritize.exit_code == 1
+    assert prioritize.output.strip() == ""
+    assert state == initial_state
+
+
+class ComponentCanTransitionCase(NamedTuple):
+    case_name: str
+    initial_state: MockBackendState
+    ticket_id: str
+    to_state: str
+    expected_output: str
+
+
+def _component_can_transition_case_id(case: ComponentCanTransitionCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        ComponentCanTransitionCase(
+            case_name="reachable_with_wait_capacity",
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+            ticket_id="ticket-1",
+            to_state="In Progress",
+            expected_output="true",
+        ),
+        ComponentCanTransitionCase(
+            case_name="unreachable_from_backlog",
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+            ticket_id="ticket-1",
+            to_state="Done",
+            expected_output="false",
+        ),
+        ComponentCanTransitionCase(
+            case_name="unknown_to_state",
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+            ticket_id="ticket-1",
+            to_state="Nowhere",
+            expected_output="false",
+        ),
+        ComponentCanTransitionCase(
+            case_name="wait_limit_reached",
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="Backlog",
+                        priority="a1",
+                        token=None,
+                        waiting_for="In Progress",
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-3",
+                        state="Backlog",
+                        priority="a2",
+                        token=None,
+                        waiting_for="In Progress",
+                    ),
+                ),
+                unadopted=(),
+            ),
+            ticket_id="ticket-1",
+            to_state="In Progress",
+            expected_output="false",
+        ),
+    ],
+    ids=_component_can_transition_case_id,
+)
+def test_component_can_transition_answers_from_backend_facts(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+    case: ComponentCanTransitionCase,
+) -> None:
+    # GIVEN
+    initial_state = case.initial_state
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["DESCRIBE_HOOK"] = hooks.describe
+        env["COUNT_HOOK"] = hooks.count
+        env["GET_STATE_HOOK"] = hooks.get_state
+        result = runner.invoke(
+            cli,
+            ["can-transition", case.ticket_id, case.to_state],
+            env=env,
+            obj={},
+        )
+        state = read_mock_backend_state()
+    # THEN
+    assert result.exception is None
+    assert result.output.strip() == case.expected_output
+    assert state == initial_state

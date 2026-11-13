@@ -27,7 +27,8 @@
 - The script dispatches on its first argument, one
   name per hook: `describe`, `count`, `get-state`,
   `claim-ticket`, `transition`, `system-move`,
-  `list-waiting`. Each hook command is the script
+  `list-waiting`, `release`, `discard`, `adopt`,
+  `prioritize`. Each hook command is the script
   plus its name, in canonical POSIX form.
 - State is JSON, one file, read and written on every
   invocation, so state survives across hook calls:
@@ -36,8 +37,16 @@
   {"tickets": [
     {"ticket": "ticket-1", "state": "Backlog",
      "priority": "a0", "token": null, "waiting_for": null}
-  ]}
+  ],
+   "unadopted": ["ticket-9"]}
   ```
+
+- The state also lists backend tickets not yet
+  adopted into Workpull, and counts the adopt keys
+  it has issued, so an adopted ticket's key comes
+  after every key ever issued, even a key whose
+  ticket was later discarded. The count is backend
+  bookkeeping, not part of the asserted state.
 
 - A ticket has a work state, a priority key, a claim
   token or null, and a waiting-for state or null. A
@@ -49,7 +58,10 @@
   a work slot in the state it left, so pulling it out
   of wait opens a work slot there.
 - Priority keys are strings, never floats, in priority
-  order, first is highest. The mock issues a
+  order, first is highest. A key is a letter followed
+  by digits, and the letter counts the digits: a0 to
+  a9, then b10 to b99, then c100, so plain string
+  order is priority order at any count. The mock issues a
   deterministic token per claim, `token-<ticket id>`
   for the ticket claimed, so the test can assert it
   and a token binds one claim to one ticket. A real
@@ -100,9 +112,35 @@
   TOML `tickets = [...]`, the tickets waiting for
   that state in priority order, first is highest.
   An empty list means no ticket is waiting for it.
-- `RELEASE_HOOK` is not in this step. Its contract
-  is written in design 010, and the mock grows it
-  when a scenario needs it.
+- `RELEASE_HOOK`, `WORKPULL_TICKET`,
+  `WORKPULL_TOKEN`, validates the token against the
+  claim, ends the claim, and prints the ticket id.
+  The ticket keeps its state and its priority. A
+  token that does not match means exit 1, and the
+  claim stands.
+- `DISCARD_HOOK`, `WORKPULL_TICKET`,
+  `WORKPULL_TOKEN`, validates the token against the
+  claim, removes the ticket from the backend
+  entirely — no state, no priority, no claim — and
+  prints the ticket id. The token is invalid
+  afterwards. A token that does not match means
+  exit 1, and no discard.
+- `ADOPT_HOOK`, `WORKPULL_TICKET` only, adopts a
+  backend ticket that is not in Workpull yet:
+  assigns the first state in the describe view and
+  the next priority key after every key ever
+  issued, and prints the ticket id. A ticket
+  already in the system means exit 1, and no
+  adoption.
+- `PRIORITIZE_HOOK`, `WORKPULL_TICKET`,
+  `WORKPULL_AFTER`, moves the ticket to just after
+  the after ticket, or to the top for
+  `WORKPULL_TOP`, and prints the ticket id. The
+  mock rebalances the keys in the new order,
+  starting from a0: keys are backend-owned, so the
+  order is the contract, not the key values. An
+  unknown ticket or after ticket means exit 1, and
+  no move.
 
 ## Scenario 1: transition with capacity, Event 8
 
@@ -171,8 +209,11 @@
   Backlog holding token-ticket-1; system-move uses
   ticket-1 in Backlog waiting for In Progress;
   list-waiting uses ticket-1 in Backlog waiting for
-  In Progress.
-- Probe, one per hook, parametrized over the seven
+  In Progress; release and discard use ticket-1 in
+  Backlog holding token-ticket-1; adopt uses
+  ticket-9 not yet adopted; prioritize uses
+  ticket-1 and ticket-2 in Backlog.
+- Probe, one per hook, parametrized over the eleven
   hook names: run `mock_backend.py <hook>` directly,
   with the hook's correct env plus
   `WORKPULL_EXTRA=1`.
@@ -335,6 +376,272 @@
   pull's capacity gate, leaves earlier moves
   applied, nothing is rolled back.
 
+## Scenario 12: discard removes a claimed ticket
+
+- Initial state: ticket-1 in Backlog, priority a0,
+  unclaimed; ticket-2 and ticket-3 in In Progress,
+  priorities a0 and a1, unclaimed.
+- Commands, through the CLI runner: claim-ticket
+  Backlog, then discard ticket-1 with the token the
+  claim returned.
+- Final state, asserted three ways: get-state
+  ticket-1 exits 1, because the ticket is gone;
+  count Backlog is wait 0, work 0, and count
+  In Progress is wait 0, work 2; the state file
+  holds only ticket-2 and ticket-3. The discarded
+  ticket counts against no state's WIP.
+
+## Scenario 13: token invalid after discard
+
+- Initial state: ticket-1 in Backlog, priority a0,
+  unclaimed; ticket-2 in In Progress, priority a0,
+  unclaimed.
+- Commands, through the CLI runner: claim-ticket
+  Backlog, discard ticket-1 with its token, then
+  release, transition, and discard again, each
+  presenting the same token.
+- Final state: each of the three later commands
+  exits 1 with empty output, and the state file
+  holds only ticket-2. Discard ends the claim, and
+  the token buys nothing afterwards.
+
+## Scenario 14: discard with another ticket's token
+
+- Initial state: ticket-1 and ticket-2 in Backlog,
+  priorities a0 and a1, unclaimed; ticket-3 in
+  In Progress, priority a0, unclaimed.
+- Commands, through the CLI runner: claim-ticket
+  Backlog twice, then discard ticket-1 with
+  ticket-2's token.
+- Final state: the discard exits 1 with empty
+  output, and the state file is unchanged, both
+  tickets still in Backlog holding their own
+  tokens. This is Scenario 3's shape, for discard.
+
+## Scenario 15: discard of a ticket with no claim
+
+- Initial state: ticket-1 in Backlog, priority a0,
+  unclaimed.
+- Command, through the CLI runner: discard
+  ticket-1 with token-ticket-1.
+- Final state: the discard exits 1 with empty
+  output, and the state file is unchanged. There
+  is no claim to discard, so the token matches
+  nothing. Only a ticket with a claim can be
+  discarded.
+
+## Scenario 16: release ends the claim, ticket claimed again
+
+- Initial state: ticket-1 in Backlog, priority a0,
+  unclaimed; ticket-2 in In Progress, priority a0,
+  unclaimed.
+- Commands, through the CLI runner: claim-ticket
+  Backlog, release ticket-1 with the token the
+  claim returned, transition ticket-1 to
+  In Progress with the same token, claim-ticket
+  Backlog again, then get-state ticket-1.
+- Final state: the release exits 0 and prints
+  ticket-1; the transition exits 1, because the
+  claim is gone and its token buys nothing; the
+  second claim returns ticket-1 with a token, and
+  get-state returns Backlog; the state file has
+  ticket-1 in Backlog, priority a0, holding the
+  second claim's token, its state and priority
+  untouched by the release. The mock issues
+  `token-<ticket id>` per claim, so the second
+  token is the same string; the scenario proves
+  the fresh claim, not a new string.
+
+## Scenario 17: release with another ticket's token
+
+- Initial state and commands are Scenario 14's,
+  with release in place of discard.
+- Final state: the release exits 1 with empty
+  output, and the state file is unchanged, both
+  tickets still in Backlog holding their own
+  tokens. A token releases only its own claim.
+
+## Scenario 18: adopt assigns first state and lowest priority
+
+- Initial state: ticket-1 and ticket-2 in Backlog,
+  priorities a0 and a1, unclaimed; ticket-3 exists
+  in the backend, not yet adopted.
+- Commands, through the CLI runner: adopt
+  ticket-3, then claim-ticket Backlog three times.
+- Final state: adopt prints ticket-3; the claims
+  return ticket-1, ticket-2, and ticket-3, in that
+  order — adoption order is priority order, and
+  the adopted ticket is last; the state file has
+  ticket-3 in Backlog, priority a2, and no ticket
+  left unadopted.
+
+## Scenario 19: adopt rejects a ticket already in the system
+
+- Two cases, one parametrized test: ticket-1
+  already adopted, in Backlog; ticket-1 already in
+  progress, in In Progress.
+- Command, through the CLI runner: adopt ticket-1.
+- Final state: the adopt exits 1 with empty
+  output, and the state file is unchanged. Adopt
+  only takes a ticket that is not in the system
+  yet.
+
+## Scenario 20: prioritize reorders tickets
+
+- Two cases, one parametrized test, sharing WHEN
+  and THEN and differing only in GIVEN: move
+  ticket-1 to just after ticket-3, the last
+  ticket; move ticket-3 to the top, with
+  `WORKPULL_TOP`. Both start from ticket-1,
+  ticket-2, and ticket-3 in Backlog, priorities
+  a0, a1, and a2, unclaimed.
+- Commands, through the CLI runner: prioritize,
+  then claim-ticket Backlog.
+- Final state: the claim returns the new top
+  ticket — ticket-2 in the first case, ticket-3
+  in the second — and the state file shows the
+  new order in the priority keys, rebalanced to
+  a0, a1, a2. Priority order is one order across
+  states; the move carries no state change.
+
+## Scenario 21: prioritize with an unknown after ticket
+
+- Initial state: ticket-1 and ticket-2 in Backlog,
+  priorities a0 and a1, unclaimed.
+- Command, through the CLI runner: prioritize
+  ticket-1 after ticket-9.
+- Final state: the prioritize exits 1 with empty
+  output, and the state file is unchanged. The
+  backend validates the after ticket.
+
+## Scenario 22: can-transition answers from backend facts
+
+- Four cases, one parametrized test, sharing WHEN
+  and THEN and differing only in GIVEN: a move
+  reachable with wait capacity answers true; a
+  move the describe transitions do not allow
+  answers false; an unknown to-state answers
+  false; a to-state whose wait count is at its
+  wait limit answers false.
+- Command, through the CLI runner: can-transition.
+- Final state: the printed word matches the case,
+  the command exits 0, and the state file is
+  unchanged. Can-transition has no hook of its
+  own: it composes get-state, describe, and count,
+  so the mock needs no new hook for it, and the
+  scenario runs the command itself, not only the
+  check inside transition.
+
+## Scenario 23: describe prints the mock backend's view
+
+- Initial state: no tickets.
+- Command, through the CLI runner: describe.
+- Final state: the CLI prints the mock's view,
+  normalized: the four states, Backlog to
+  In Progress and In Progress to Done, and the
+  WIP limits. The describe hook otherwise runs
+  inside transition and can-transition; this
+  scenario runs the command itself.
+
+## Scenario 24: release of a ticket with no claim
+
+- Initial state: ticket-1 in Backlog, priority a0,
+  unclaimed.
+- Command, through the CLI runner: release
+  ticket-1 with token-ticket-1.
+- Final state: the release exits 1 with empty
+  output, and the state file is unchanged. There
+  is no claim to release, so the token matches
+  nothing. This is Scenario 15's shape, for
+  release.
+
+## Scenario 25: adopt with many tickets, adopted ticket is last
+
+- Initial state: ticket-1 to ticket-11 in Backlog,
+  priorities a0 to a9 and b10, unclaimed;
+  ticket-12 exists in the backend, not yet
+  adopted.
+- Commands, through the CLI runner: adopt
+  ticket-12, then claim-ticket Backlog twelve
+  times.
+- Final state: the claims return ticket-1 to
+  ticket-12, in that order; the state file has
+  ticket-12 in Backlog, priority b11, and no
+  ticket left unadopted. The adopted ticket is
+  claimed last, so the lowest-priority rule holds
+  past the single-digit keys.
+
+## Scenario 26: adopt two tickets, keys increase in adoption order
+
+- Initial state: ticket-1 in Backlog, priority
+  a0, unclaimed; ticket-2 and ticket-3 exist in
+  the backend, not yet adopted.
+- Commands, through the CLI runner: adopt
+  ticket-2, adopt ticket-3, then claim-ticket
+  Backlog three times.
+- Final state: the claims return ticket-1,
+  ticket-2, and ticket-3, in that order; the
+  state file has ticket-2 at priority a1 and
+  ticket-3 at priority a2, and no ticket left
+  unadopted. The adopt counter moves on with each
+  adoption, so each issued key is strictly after
+  the one before it.
+
+## Scenario 27: adopt after discarding the highest key
+
+- Initial state: ticket-1 and ticket-2 in
+  Backlog, priorities a0 and a1, unclaimed;
+  ticket-3 exists in the backend, not yet
+  adopted.
+- Commands, through the CLI runner: claim-ticket
+  Backlog twice, discard ticket-2 with its token,
+  adopt ticket-3, then claim-ticket Backlog.
+- Final state: the claim returns ticket-3; the
+  state file has ticket-1 in Backlog, priority
+  a0, holding its claim token, ticket-3 in
+  Backlog, priority a2, holding the last claim's
+  token, and no ticket left unadopted. The issued
+  key comes after a1, the highest key ever
+  issued, even though its ticket was discarded:
+  the counter counts keys issued, not keys in
+  use.
+
+## Scenario 28: prioritize with many tickets, rebalance holds order
+
+- Initial state: ticket-1 to ticket-12 in Backlog,
+  priorities a0 to a9, b10, and b11, unclaimed.
+- Commands, through the CLI runner: prioritize
+  ticket-1 after ticket-12, then claim-ticket
+  Backlog.
+- Final state: the claim returns ticket-2; the
+  state file shows the new order in the priority
+  keys, rebalanced across the single-digit
+  boundary: ticket-2 at a0 through ticket-11 at
+  a9, ticket-12 at b10, and ticket-1 last at b11.
+  The rebalance uses the same key scheme as
+  adoption, so plain string order stays priority
+  order past ten tickets.
+
+## Scenario 29: adopt from a sparse seed
+
+- Two cases, one parametrized test, sharing WHEN
+  and THEN and differing only in GIVEN: the only
+  ticket sits at b10; the only ticket sits at
+  b99. In each case ticket-2 exists in the
+  backend, not yet adopted.
+- Commands, through the CLI runner: adopt
+  ticket-2, then claim-ticket Backlog twice.
+- Final state: the claims return ticket-1, then
+  ticket-2; the state file has ticket-2 at b11 in
+  the first case and at c100 in the second, and
+  no ticket left unadopted. The counter seeds
+  from the highest key ever issued, not from the
+  ticket count — a count seed would issue a1 in
+  both cases, ahead of the seed ticket — and the
+  key letter counts digits at any count, so the
+  adopted ticket is last even at the hundred
+  boundary.
+
 ## Visual board
 
 - A read-only board over the mock backend state file
@@ -352,5 +659,20 @@
 - Event 10 N-step cascade is in the mock: the
   chain pulls backwards while each pull moves a
   ticket, and there is no `pull` command yet.
-- No release in the mock yet.
+- No command is left without a scenario: the
+  earlier scenarios run count, get-state,
+  claim-ticket, transition, system-move, and
+  list-waiting; Scenarios 12 to 23 add release,
+  discard, adopt, prioritize, can-transition, and
+  describe. Scenario 24 adds the release failure
+  with no claim, and Scenarios 25 to 27 pin the
+  adopt key invariants: the adopted ticket is
+  last at any count, keys increase across
+  adoptions, and an issued key comes after every
+  key ever issued, even a discarded one.
+  Scenario 28 pins the prioritize rebalance in
+  the same key scheme past ten tickets, and
+  Scenario 29 pins the counter's seed and the
+  key letter at a sparse seed and at the hundred
+  boundary.
 - No real backend. The mock is test support only.
