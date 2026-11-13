@@ -55,6 +55,10 @@ Do not front-load later requirements.
    not a reason to pivot the design.
    `<interpreter> scripts/dev.py install` refuses to run
    outside an activated venv. No system install is supported.
+   Finish the bootstrap with
+   `git config core.hooksPath .githooks`, so commits in this
+   clone run lint and type first and pushes run the tests
+   first.
 1. Requirement: write `requirements/<nnn>-<name>.md`, what only.
    Do not read design or implementation documents yet.
 2. Design: write `design/<nnn>-<name>.md`, how only.
