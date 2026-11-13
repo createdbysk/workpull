@@ -32,6 +32,9 @@ as missing, do not pivot to another toolchain or language.
   Black-formatted.
 - Type check: pyrefly, config in `pyrefly.toml`, declared as a
   dev dependency in `pyproject.toml`. Code uses type hints.
+- Coverage: pytest-cov, declared as a dev dependency in
+  `pyproject.toml`. `python scripts/dev.py coverage` measures
+  the `workpull` package and fails under 100%.
 - Skill files use YAML frontmatter.
 
 ## Install
@@ -71,6 +74,7 @@ All `python` commands below are the venv Python, after setup.
 - Test: `python scripts/dev.py test`
 - Lint: `python scripts/dev.py lint`
 - Type: `python scripts/dev.py type`
+- Coverage: `python scripts/dev.py coverage`
 - Describe: `DESCRIBE_HOOK="python adapters/mock_describe.py"`
   `python -m workpull describe`
 

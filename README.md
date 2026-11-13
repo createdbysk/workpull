@@ -92,6 +92,7 @@ consumer.
 python scripts/dev.py test
 python scripts/dev.py lint
 python scripts/dev.py type
+python scripts/dev.py coverage
 ```
 
 See `AGENTS.md` for the full workflow.

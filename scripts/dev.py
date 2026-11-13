@@ -7,6 +7,7 @@ script itself:
     python scripts/dev.py test
     python scripts/dev.py lint
     python scripts/dev.py type
+    python scripts/dev.py coverage
 
 Installation requires a venv. There is no supported system install.
 """
@@ -89,6 +90,22 @@ def cmd_test(_args: argparse.Namespace) -> int:
     return run([str(python), "-m", "pytest", "tests", "-q"])
 
 
+def cmd_coverage(_args: argparse.Namespace) -> int:
+    python = venv_python() if venv_python().exists() else sys.executable
+    return run(
+        [
+            str(python),
+            "-m",
+            "pytest",
+            "tests",
+            "-q",
+            "--cov=workpull",
+            "--cov-report=term-missing",
+            "--cov-fail-under=100",
+        ]
+    )
+
+
 def cmd_type(_args: argparse.Namespace) -> int:
     pyrefly = shutil.which("pyrefly")
     if not pyrefly:
@@ -162,6 +179,10 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("test", help="Run pytest.")
     sub.add_parser("lint", help="Run pymarkdown on docs, Ruff and Black on Python.")
     sub.add_parser("type", help="Run pyrefly type check.")
+    sub.add_parser(
+        "coverage",
+        help="Run pytest with coverage of the workpull package, failing under 100%.",
+    )
     args = parser.parse_args(argv)
     commands = {
         "setup": cmd_setup,
@@ -169,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
         "test": cmd_test,
         "lint": cmd_lint,
         "type": cmd_type,
+        "coverage": cmd_coverage,
     }
     return commands[args.command](args)
 

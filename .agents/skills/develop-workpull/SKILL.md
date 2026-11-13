@@ -71,9 +71,10 @@ Do not front-load later requirements.
    and injection cases. No invented output on failure.
 6. Implementation document: write
    `implementation/<nnn>-<name>.md`, concrete build only.
-7. Lint and test, with the venv Python from step 0:
+7. Lint, test, and coverage, with the venv Python from step 0:
    - `python scripts/dev.py test`
    - `python scripts/dev.py lint`
+   - `python scripts/dev.py coverage`
 8. Push to a branch, never to main. Main is protected, pull
    request required, rebase only, no squash, no merge commits.
 9. Independent review, before merge: get an expert open-source
