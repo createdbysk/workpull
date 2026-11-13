@@ -21,7 +21,7 @@ Find a Python 3.12 interpreter, in order `python`, `python3`,
 
 This creates a venv and installs dev dependencies. There is no
 supported system install. After setup, use the venv Python.
-The entry point, from a checkout, is `python -m workpull`.
+The entry point is the `workpull` command, installed in the venv.
 Plugins and adapters in this repo are examples for a checkout,
 not installed package contents.
 
@@ -29,7 +29,7 @@ not installed package contents.
 
 ```bash
 DESCRIBE_HOOK="python adapters/mock_describe.py" \
-  python -m workpull describe
+  workpull describe
 ```
 
 Output:
@@ -48,7 +48,7 @@ Backlog = inf
 
 ```bash
 DESCRIBE_HOOK="python plugins/github/describe.py" \
-  python -m workpull describe
+  workpull describe
 ```
 
 Output:

@@ -809,6 +809,180 @@ Done = {work = 3, wait = 2}
     assert expected == actual
 
 
+def test_empty_states_is_rejected(run_describe: RunDescribe) -> None:
+    # GIVEN
+    expected: DescribeOutcome = {"exit_code": 2, "view": None}
+    expected_output = "invalid describe output: states must be a non-empty list\n"
+    body = """states = []
+transitions = {}
+wip_limits = {}
+"""
+    # WHEN
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = "fake-hook"
+    result = run_describe(env, HookResult(0, body, ""))
+    # THEN
+    actual: DescribeOutcome = describe_outcome(result)
+    assert expected == actual
+    assert expected_output == result.output
+
+
+def test_non_string_state_is_rejected(run_describe: RunDescribe) -> None:
+    # GIVEN
+    expected: DescribeOutcome = {"exit_code": 2, "view": None}
+    expected_output = "invalid describe output: invalid state name: 1\n"
+    body = """states = [1, "Done"]
+transitions = {}
+wip_limits = {}
+"""
+    # WHEN
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = "fake-hook"
+    result = run_describe(env, HookResult(0, body, ""))
+    # THEN
+    actual: DescribeOutcome = describe_outcome(result)
+    assert expected == actual
+    assert expected_output == result.output
+
+
+def test_transitions_not_a_table_is_rejected(run_describe: RunDescribe) -> None:
+    # GIVEN
+    expected: DescribeOutcome = {"exit_code": 2, "view": None}
+    expected_output = "invalid describe output: transitions must be a table\n"
+    body = """states = ["Backlog", "Done"]
+transitions = "Backlog to Done"
+wip_limits = {}
+"""
+    # WHEN
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = "fake-hook"
+    result = run_describe(env, HookResult(0, body, ""))
+    # THEN
+    actual: DescribeOutcome = describe_outcome(result)
+    assert expected == actual
+    assert expected_output == result.output
+
+
+def test_transition_source_not_in_states_is_rejected(
+    run_describe: RunDescribe,
+) -> None:
+    # GIVEN
+    expected: DescribeOutcome = {"exit_code": 2, "view": None}
+    expected_output = (
+        "invalid describe output: transition source not in states: 'Elsewhere'\n"
+    )
+    body = """states = ["Backlog", "Done"]
+
+[transitions]
+Elsewhere = "Done"
+
+[wip_limits]
+Backlog = {work = inf, wait = 3}
+Done = {work = inf, wait = inf}
+"""
+    # WHEN
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = "fake-hook"
+    result = run_describe(env, HookResult(0, body, ""))
+    # THEN
+    actual: DescribeOutcome = describe_outcome(result)
+    assert expected == actual
+    assert expected_output == result.output
+
+
+def test_wip_limits_not_a_table_is_rejected(run_describe: RunDescribe) -> None:
+    # GIVEN
+    expected: DescribeOutcome = {"exit_code": 2, "view": None}
+    expected_output = "invalid describe output: wip_limits must be a table\n"
+    body = """states = ["Backlog"]
+transitions = {}
+wip_limits = "Backlog"
+"""
+    # WHEN
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = "fake-hook"
+    result = run_describe(env, HookResult(0, body, ""))
+    # THEN
+    actual: DescribeOutcome = describe_outcome(result)
+    assert expected == actual
+    assert expected_output == result.output
+
+
+def test_wip_limits_entry_not_a_table_is_rejected(
+    run_describe: RunDescribe,
+) -> None:
+    # GIVEN
+    expected: DescribeOutcome = {"exit_code": 2, "view": None}
+    expected_output = "invalid describe output: invalid wip_limits: 'Backlog' -> 3\n"
+    body = """states = ["Backlog", "Done"]
+
+[transitions]
+Backlog = "Done"
+
+[wip_limits]
+Backlog = 3
+Done = {work = inf, wait = inf}
+"""
+    # WHEN
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = "fake-hook"
+    result = run_describe(env, HookResult(0, body, ""))
+    # THEN
+    actual: DescribeOutcome = describe_outcome(result)
+    assert expected == actual
+    assert expected_output == result.output
+
+
+def test_bool_wip_limit_is_rejected(run_describe: RunDescribe) -> None:
+    # GIVEN
+    expected: DescribeOutcome = {"exit_code": 2, "view": None}
+    expected_output = (
+        "invalid describe output: invalid wip_limit: 'Backlog' -> work True\n"
+    )
+    body = """states = ["Backlog", "Done"]
+
+[transitions]
+Backlog = "Done"
+
+[wip_limits]
+Backlog = {work = true, wait = 3}
+Done = {work = inf, wait = inf}
+"""
+    # WHEN
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = "fake-hook"
+    result = run_describe(env, HookResult(0, body, ""))
+    # THEN
+    actual: DescribeOutcome = describe_outcome(result)
+    assert expected == actual
+    assert expected_output == result.output
+
+
+def test_finite_float_wip_limit_is_rejected(run_describe: RunDescribe) -> None:
+    # GIVEN
+    expected: DescribeOutcome = {"exit_code": 2, "view": None}
+    expected_output = (
+        "invalid describe output: invalid wip_limit: 'Backlog' -> work 1.5\n"
+    )
+    body = """states = ["Backlog", "Done"]
+
+[transitions]
+Backlog = "Done"
+
+[wip_limits]
+Backlog = {work = 1.5, wait = 3}
+Done = {work = inf, wait = inf}
+"""
+    # WHEN
+    env = dict(os.environ)
+    env["DESCRIBE_HOOK"] = "fake-hook"
+    result = run_describe(env, HookResult(0, body, ""))
+    # THEN
+    actual: DescribeOutcome = describe_outcome(result)
+    assert expected == actual
+    assert expected_output == result.output
+
+
 def test_describe_help(runner: CliRunner, normalize_help: NormalizeHelp) -> None:
     # GIVEN
     expected: HelpOutcome = {

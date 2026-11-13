@@ -74,7 +74,7 @@ def run_hook(hook_command: str, env: dict[str, str]) -> HookResult:
     return HookResult(result.returncode, result.stdout, result.stderr)
 
 
-def validate_describe(view: object) -> str | None:
+def validate_describe(view: dict[str, Any]) -> str | None:
     """Validate a parsed describe document. Returns an error string or None.
 
     Contract, for hook authors:
@@ -92,8 +92,6 @@ def validate_describe(view: object) -> str | None:
       There is no other constraint on the values: the
       backend decides them, for every state.
     """
-    if not isinstance(view, dict):
-        return "describe output is not a TOML document"
     if set(view) != {"states", "transitions", "wip_limits"}:
         return (
             "describe output must contain exactly states, transitions, and wip_limits"

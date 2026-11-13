@@ -44,7 +44,7 @@ defines its own states and transitions. Do not assume them.
      `../../design/002-github-describe.md`, then stop and return
      to this file.
    - Run `DESCRIBE_HOOK="python plugins/github/describe.py"
-     python -m workpull describe`.
+     workpull describe`.
 
 ## Progressive discovery
 

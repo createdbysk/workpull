@@ -76,7 +76,7 @@ All `python` commands below are the venv Python, after setup.
 - Type: `python scripts/dev.py type`
 - Coverage: `python scripts/dev.py coverage`
 - Describe: `DESCRIBE_HOOK="python adapters/mock_describe.py"`
-  `python -m workpull describe`
+  `workpull describe`
 
 ## Layout
 
@@ -98,7 +98,7 @@ All `python` commands below are the venv Python, after setup.
 - `plugins/` — repo examples, not installed package contents.
   `plugins/github/` is a shape-validation mock for GitHub
   issues, describe only, not a live backend adapter. The
-  entry point is `python -m workpull`, from a checkout.
+  entry point is the `workpull` command, installed in the venv.
 
 ## Workflow
 

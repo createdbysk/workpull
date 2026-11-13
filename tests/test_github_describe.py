@@ -1,26 +1,32 @@
 """Tests for the GitHub issues describe mock, which validates
 the shape of the describe contract.
 
-Tests drive the CLI as a subprocess with DESCRIBE_HOOK pointing
-at the adapter script, with an explicit environment. Describe
-needs no network and no token, so no live GitHub call is made
-here.
+Tests drive the CLI through Click's test runner with
+DESCRIBE_HOOK pointing at the adapter script, with an explicit
+environment. The hook itself still runs as a real subprocess,
+through the real run_hook. Describe needs no network and no
+token, so no live GitHub call is made here.
 """
 
 import os
 import subprocess
 import sys
-import pytest
 import tomllib
 from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple, TypedDict
 
+import pytest
+from click.testing import CliRunner, Result
+
+from workpull.cli import cli
+
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTER = ROOT / "plugins" / "github" / "describe.py"
 
 
-RunCli = Callable[[dict[str, str]], subprocess.CompletedProcess[str]]
+RunCli = Callable[[dict[str, str]], Result]
+HookCommand = Callable[[str], str]
 
 
 # A WIP limit is a positive int, or inf, the only float allowed.
@@ -55,22 +61,15 @@ def parse_view(text: str) -> View:
 
 
 @pytest.fixture
-def run_cli() -> RunCli:
-    def _run(env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-        """Run `python -m workpull describe` with an explicit env."""
-        return subprocess.run(
-            [sys.executable, "-m", "workpull", "describe"],
-            cwd=ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+def run_cli(runner: CliRunner) -> RunCli:
+    def _run(env: dict[str, str]) -> Result:
+        """Run the CLI's describe command with an explicit env."""
+        return runner.invoke(cli, ["describe"], env=env, obj={})
 
     return _run
 
 
-def test_cli_via_github_adapter(run_cli: RunCli) -> None:
+def test_cli_via_github_adapter(run_cli: RunCli, hook_command: HookCommand) -> None:
     # GIVEN
     expected: Outcome = {
         "exit_code": 0,
@@ -84,13 +83,13 @@ def test_cli_via_github_adapter(run_cli: RunCli) -> None:
         },
     }
     env = dict(os.environ)
-    env["DESCRIBE_HOOK"] = f"{Path(sys.executable).as_posix()} {ADAPTER.as_posix()}"
+    env["DESCRIBE_HOOK"] = hook_command(ADAPTER.as_posix())
     # WHEN
     result = run_cli(env)
     # THEN
     actual: Outcome = {
-        "exit_code": result.returncode,
-        "view": parse_view(result.stdout) if result.returncode == 0 else None,
+        "exit_code": result.exit_code,
+        "view": parse_view(result.output) if result.exit_code == 0 else None,
     }
     assert expected == actual
 

@@ -18,8 +18,9 @@
 
 - Click is a runtime dependency. The runtime is no longer
   stdlib-only. Click is the only runtime dependency.
-- The entry point remains `python -m workpull`, from a checkout.
-  A console script is not added by this requirement.
+- The entry point is the `workpull` console script, generated
+  by the installer from the entry point declared in
+  `pyproject.toml` and installed into the venv by setup.
 
 ## Testing
 
