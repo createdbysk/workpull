@@ -6,9 +6,12 @@ states and transitions. Workpull never assumes them.
 
 ## Current scope
 
-Only `describe` is available. It returns a backend's states and
-transition as TOML. Ready and claim are not available yet.
-Do not use them, and do not invent their commands.
+The CLI has eleven commands: `describe`, `claim-ticket`,
+`adopt`, `prioritize`, `get-state`, `count`, `can-transition`,
+`transition`, `release`, `discard`, and `pull`. `describe`
+returns a backend's states and transitions as TOML. `pull`
+sweeps the whole board, moving waiting tickets into open
+slots, downstream first. Do not invent commands beyond these.
 
 ## Install
 

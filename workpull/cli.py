@@ -593,6 +593,31 @@ def transition(ticket: str, to_state: str, token: str, run_hook_fn: RunHook) -> 
     click.echo(ticket_id)
 
 
+def pull(run_hook_fn: RunHook) -> None:
+    """Pull waiting tickets into open slots."""
+    view = _fetch_describe_view(run_hook_fn)
+    # Reverse describe order: a state is visited before
+    # every state that can feed it, so a slot a pull
+    # opens in an earlier state is filled when the
+    # sweep reaches that state, in the same run. Each
+    # state loops until its fresh count reaches its
+    # work limit or its wait empties; the per-move
+    # step is the cascade's, unchanged.
+    for state in reversed(view["states"]):
+        while True:
+            ticket = _pull_one_waiting_ticket_into_opened_slot(state, view, run_hook_fn)
+            if ticket is None:
+                break
+            click.echo(ticket)
+
+
+@cli.command(name="pull")
+@click.pass_context
+def pull_command(ctx: click.Context) -> None:
+    """Pull waiting tickets into open slots."""
+    pull(ctx.obj["run_hook"])
+
+
 @cli.command(name="adopt")
 @click.argument("ticket")
 @click.pass_context

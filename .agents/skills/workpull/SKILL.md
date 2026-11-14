@@ -18,6 +18,10 @@ defines its own states and transitions. Do not assume them.
   move the item.
 - A transition moves an item to a later state in that
   backend, only if that state is below its WIP limit.
+- Pull sweeps the whole board: it moves waiting work
+  into open slots, downstream first, until every state
+  is at its WIP limit or its wait is empty. It claims
+  nothing.
 - Work closer to done gets attention before work farther
   from done, even if the farther work had the higher
   original priority. Within a column, priority is top to
@@ -54,6 +58,8 @@ not load a document for a later step while you are on an earlier one.
 
 ## Current scope
 
-Only describe and claim-ticket are available. Do not use
-ready, and do not invent its command, until its requirement,
-design, and implementation documents exist.
+The available commands are describe, claim-ticket, adopt,
+prioritize, get-state, count, can-transition, transition,
+release, discard, and pull. Do not use ready, and do not
+invent its command, until its requirement, design, and
+implementation documents exist.

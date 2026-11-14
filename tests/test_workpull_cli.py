@@ -47,6 +47,7 @@ def test_top_level_help_lists_commands(
               discard       Discard a ticket.
               get-state     Get a ticket's current state.
               prioritize    Move a ticket to a new priority.
+              pull          Pull waiting tickets into open slots.
               release       Release a ticket's claim.
               transition    Move a ticket to a wait state.
             """),

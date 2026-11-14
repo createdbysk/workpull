@@ -655,6 +655,48 @@
   in the closing command the claim state makes
   possible.
 
+## Scenario 30: pull sweep drains a chained board
+
+- Initial state, with the chained describe view:
+  ticket-1 in Backlog, priority a0; ticket-2 in
+  In Progress, priority a0, waiting for In Work;
+  ticket-3 in Backlog, priority a1, waiting for
+  In Progress; ticket-4 in In Progress, priority
+  a1, waiting for In Work; ticket-5 in In Work,
+  priority a0, waiting for Done; ticket-6 in
+  In Progress, priority a2. In Progress is at its
+  work limit of 3: ticket-2, ticket-4, and
+  ticket-6 count as its work.
+- Command, through the CLI runner: pull.
+- Final state: the command exits 0 and prints
+  ticket-5, ticket-2, ticket-4, ticket-3, one per
+  line, in the order moved. Downstream states are
+  served first: ticket-5 moves into Done, then
+  ticket-2 and ticket-4 move into In Work,
+  emptying its wait, and only then does
+  In Progress — its work count dropped by those
+  moves — pull ticket-3. The state file has
+  ticket-1 in Backlog, ticket-2 and ticket-4 in
+  In Work, ticket-3 and ticket-6 in In Progress,
+  ticket-5 in Done, and no ticket waiting.
+
+## Scenario 31: pull sweep at the limit moves nothing
+
+- Initial state: ticket-1, ticket-2, and ticket-3
+  in In Progress, priorities a0, a1, and a2, so
+  In Progress is at its work limit of 3; ticket-4
+  in Backlog, priority a0, waiting for
+  In Progress.
+- Command, through the CLI runner: pull.
+- Final state: the command exits 0 and prints
+  nothing, and the state file is unchanged. The
+  only waiting ticket waits for a state at its
+  work limit, so no slot opens for it, and no
+  other state has a ticket waiting.
+- Scenarios 30 and 31 are one parametrized test
+  over the board: the same pull command, on one
+  board it drains and one it cannot move.
+
 ## Visual board
 
 - A read-only board over the mock backend state file
@@ -671,7 +713,9 @@
 - No new production code, and no new command.
 - Event 10 N-step cascade is in the mock: the
   chain pulls backwards while each pull moves a
-  ticket, and there is no `pull` command yet.
+  ticket. The `pull` command of design 019 is
+  covered by Scenarios 30 and 31, not by a
+  scenario per state or per move.
 - No command is left without a scenario: the
   earlier scenarios run count, get-state,
   claim-ticket, transition, system-move, and
@@ -687,5 +731,9 @@
   the backend never issued, against a claimed
   ticket and an unclaimed one: transition,
   release, and discard all fail, and the board's
-  claim state is untouched.
+  claim state is untouched. Scenarios 30 and 31
+  add pull: a sweep that drains a chained board
+  toward Done in one run, in downstream-first
+  order, and a sweep that moves nothing when the
+  only waiting ticket's state is at its limit.
 - No real backend. The mock is test support only.

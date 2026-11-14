@@ -3260,3 +3260,225 @@ def test_component_fabricated_token_cannot_act_on_ticket(
     assert proof.exception is None
     assert proof.output.strip() == case.expected_proof_output
     assert state == case.expected_final_state
+
+
+class ComponentSweepCase(NamedTuple):
+    case_name: str
+    describe_view: str
+    initial_state: MockBackendState
+    expected_output: str
+    expected_done_count_output: str
+    expected_final_state: MockBackendState
+
+
+def _component_sweep_case_id(case: ComponentSweepCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        ComponentSweepCase(
+            case_name="sweep_drains_chained_board",
+            describe_view=CHAINED_DESCRIBE_VIEW,
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="In Progress",
+                        priority="a0",
+                        token=None,
+                        waiting_for="In Work",
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-3",
+                        state="Backlog",
+                        priority="a1",
+                        token=None,
+                        waiting_for="In Progress",
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-4",
+                        state="In Progress",
+                        priority="a1",
+                        token=None,
+                        waiting_for="In Work",
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-5",
+                        state="In Work",
+                        priority="a0",
+                        token=None,
+                        waiting_for="Done",
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-6",
+                        state="In Progress",
+                        priority="a2",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+            expected_output="ticket-5\nticket-2\nticket-4\nticket-3",
+            expected_done_count_output="wait = 0\nwork = 1",
+            expected_final_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="In Work",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-3",
+                        state="In Progress",
+                        priority="a1",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-4",
+                        state="In Work",
+                        priority="a1",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-5",
+                        state="Done",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-6",
+                        state="In Progress",
+                        priority="a2",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+        ),
+        ComponentSweepCase(
+            case_name="sweep_at_limit_moves_nothing",
+            describe_view=DESCRIBE_VIEW,
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="In Progress",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="In Progress",
+                        priority="a1",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-3",
+                        state="In Progress",
+                        priority="a2",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-4",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for="In Progress",
+                    ),
+                ),
+                unadopted=(),
+            ),
+            expected_output="",
+            expected_done_count_output="wait = 0\nwork = 0",
+            expected_final_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="In Progress",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="In Progress",
+                        priority="a1",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-3",
+                        state="In Progress",
+                        priority="a2",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-4",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for="In Progress",
+                    ),
+                ),
+                unadopted=(),
+            ),
+        ),
+    ],
+    ids=_component_sweep_case_id,
+)
+def test_component_pull_sweep(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+    case: ComponentSweepCase,
+) -> None:
+    # GIVEN
+    initial_state = case.initial_state
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend_with_describe(
+            hook_command, initial_state, case.describe_view
+        )
+        env = dict(os.environ)
+        env["DESCRIBE_HOOK"] = hooks.describe
+        env["COUNT_HOOK"] = hooks.count
+        env["GET_STATE_HOOK"] = hooks.get_state
+        env["SYSTEM_MOVE_HOOK"] = hooks.system_move
+        env["LIST_WAITING_HOOK"] = hooks.list_waiting
+        pull = runner.invoke(cli, ["pull"], env=env, obj={})
+        done_count = runner.invoke(cli, ["count", "Done"], env=env, obj={})
+        state = read_mock_backend_state()
+    # THEN
+    assert pull.exception is None
+    assert pull.exit_code == 0
+    assert pull.output.strip() == case.expected_output
+    assert done_count.exception is None
+    assert done_count.output.strip() == case.expected_done_count_output
+    assert state == case.expected_final_state
