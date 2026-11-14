@@ -612,6 +612,49 @@
   the counter counts keys issued, not keys in
   use.
 
+## Scenario 28: fabricated token against a claimed ticket
+
+- Initial state: ticket-1 in Backlog, priority a0,
+  unclaimed; ticket-2 in In Progress, priority a0,
+  unclaimed.
+- Commands, through the CLI runner: claim-ticket
+  Backlog, so a holder holds ticket-1's claim, then
+  transition ticket-1 to In Progress, release
+  ticket-1, and discard ticket-1, each presenting
+  the fabricated token `forged-token`. The mock
+  issues only `token-<ticket id>`, so `forged-token`
+  is a string it never issues to anyone.
+- Final state: each of the three commands exits 1
+  with empty output, and the state file is
+  unchanged by them: ticket-1 is still in Backlog,
+  still holding its claim. A closing release with
+  the holder's real token exits 0 and prints
+  ticket-1, and the state file has ticket-1 in
+  Backlog with no token. The claim stood through
+  the attempts, and the real token still works.
+
+## Scenario 29: fabricated token against an unclaimed ticket
+
+- Initial state: ticket-1 in Backlog, priority a0,
+  unclaimed; ticket-2 in In Progress, priority a0,
+  unclaimed.
+- Commands, through the CLI runner: transition
+  ticket-1 to In Progress, release ticket-1, and
+  discard ticket-1, each presenting the fabricated
+  token `forged-token`.
+- Final state: each of the three commands exits 1
+  with empty output, and the state file is
+  unchanged: ticket-1 is still in Backlog with no
+  token. A closing claim-ticket returns ticket-1
+  with its token. The attempts created no claim,
+  and the ticket was left claimable.
+- Scenarios 28 and 29 are one parametrized test,
+  ticket_claimed and ticket_unclaimed, sharing
+  WHEN and THEN and differing only in GIVEN, in
+  whether a holder claims the ticket first, and
+  in the closing command the claim state makes
+  possible.
+
 ## Visual board
 
 - A read-only board over the mock backend state file
@@ -639,5 +682,10 @@
   adoption on fuller boards: the adopted ticket
   is claimed last, claim order follows adoption
   order across two adoptions, and an adoption
-  after a discard still lands last.
+  after a discard still lands last. Scenarios
+  28 and 29 cover a fabricated token, a string
+  the backend never issued, against a claimed
+  ticket and an unclaimed one: transition,
+  release, and discard all fail, and the board's
+  claim state is untouched.
 - No real backend. The mock is test support only.

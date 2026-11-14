@@ -3049,3 +3049,214 @@ def test_component_can_transition_answers_from_backend_facts(
     assert result.exception is None
     assert result.output.strip() == case.expected_output
     assert state == initial_state
+
+
+class ComponentFabricatedTokenCase(NamedTuple):
+    case_name: str
+    initial_state: MockBackendState
+    claim_first: bool
+    expected_untouched_state: MockBackendState
+    proof_arguments: tuple[str, ...]
+    expected_proof_output: str
+    expected_final_state: MockBackendState
+
+
+def _component_fabricated_token_case_id(
+    case: ComponentFabricatedTokenCase,
+) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        ComponentFabricatedTokenCase(
+            case_name="ticket_claimed",
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="In Progress",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+            claim_first=True,
+            expected_untouched_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token="token-ticket-1",
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="In Progress",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+            proof_arguments=("release", "ticket-1", "token-ticket-1"),
+            expected_proof_output="ticket-1",
+            expected_final_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="In Progress",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+        ),
+        ComponentFabricatedTokenCase(
+            case_name="ticket_unclaimed",
+            initial_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="In Progress",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+            claim_first=False,
+            expected_untouched_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="In Progress",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+            proof_arguments=("claim-ticket", "Backlog"),
+            expected_proof_output='ticket = "ticket-1"\ntoken = "token-ticket-1"',
+            expected_final_state=MockBackendState(
+                tickets=(
+                    MockBackendTicket(
+                        ticket_id="ticket-1",
+                        state="Backlog",
+                        priority="a0",
+                        token="token-ticket-1",
+                        waiting_for=None,
+                    ),
+                    MockBackendTicket(
+                        ticket_id="ticket-2",
+                        state="In Progress",
+                        priority="a0",
+                        token=None,
+                        waiting_for=None,
+                    ),
+                ),
+                unadopted=(),
+            ),
+        ),
+    ],
+    ids=_component_fabricated_token_case_id,
+)
+def test_component_fabricated_token_cannot_act_on_ticket(
+    runner: CliRunner,
+    isolated_filesystem: IsolatedFilesystem,
+    hook_command: HookCommand,
+    case: ComponentFabricatedTokenCase,
+) -> None:
+    # GIVEN
+    initial_state = case.initial_state
+    # WHEN
+    with isolated_filesystem():
+        hooks = write_mock_backend(hook_command, initial_state)
+        env = dict(os.environ)
+        env["DESCRIBE_HOOK"] = hooks.describe
+        env["COUNT_HOOK"] = hooks.count
+        env["GET_STATE_HOOK"] = hooks.get_state
+        env["CLAIM_TICKET_HOOK"] = hooks.claim_ticket
+        env["TRANSITION_HOOK"] = hooks.transition
+        env["SYSTEM_MOVE_HOOK"] = hooks.system_move
+        env["LIST_WAITING_HOOK"] = hooks.list_waiting
+        env["RELEASE_HOOK"] = hooks.release
+        env["DISCARD_HOOK"] = hooks.discard
+        claim = (
+            runner.invoke(cli, ["claim-ticket", "Backlog"], env=env, obj={})
+            if case.claim_first
+            else None
+        )
+        transition = runner.invoke(
+            cli,
+            ["transition", "ticket-1", "In Progress", "forged-token"],
+            env=env,
+            obj={},
+        )
+        release = runner.invoke(
+            cli,
+            ["release", "ticket-1", "forged-token"],
+            env=env,
+            obj={},
+        )
+        discard = runner.invoke(
+            cli,
+            ["discard", "ticket-1", "forged-token"],
+            env=env,
+            obj={},
+        )
+        untouched_state = read_mock_backend_state()
+        proof = runner.invoke(cli, list(case.proof_arguments), env=env, obj={})
+        state = read_mock_backend_state()
+    # THEN
+    if claim is not None:
+        assert claim.exception is None
+        assert claim.output.strip() == 'ticket = "ticket-1"\ntoken = "token-ticket-1"'
+    assert transition.exit_code == 1
+    assert transition.output.strip() == ""
+    assert release.exit_code == 1
+    assert release.output.strip() == ""
+    assert discard.exit_code == 1
+    assert discard.output.strip() == ""
+    assert untouched_state == case.expected_untouched_state
+    assert proof.exception is None
+    assert proof.output.strip() == case.expected_proof_output
+    assert state == case.expected_final_state
