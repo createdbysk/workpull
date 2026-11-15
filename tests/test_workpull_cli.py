@@ -1,0 +1,62 @@
+"""Tests for the workpull CLI itself, through Click's runner.
+
+This file owns the top level help test. When a command is
+added, update the expected command list here, not in the
+command's own test file.
+"""
+
+from typing import TypedDict
+
+from click.testing import CliRunner
+from collections.abc import Callable
+
+NormalizeHelp = Callable[[str], str]
+
+from workpull.cli import cli
+
+
+class Outcome(TypedDict):
+    exit_code: int
+    help_text: str
+
+
+def test_top_level_help_lists_commands(
+    runner: CliRunner, normalize_help: NormalizeHelp
+) -> None:
+    # GIVEN
+    expected: Outcome = {
+        "exit_code": 0,
+        "help_text": normalize_help("""Usage: cli [OPTIONS] COMMAND [ARGS]...
+
+            Workpull: describe a backend's states and transitions.
+
+            Composition root: this is where the real run_hook is wired in. A caller that
+            already supplied a run_hook, in ctx.obj, keeps it, so tests can inject a
+            fake.
+
+            Options:
+              --version  Show the version and exit.
+              --help     Show this message and exit.
+
+            Commands:
+              adopt         Adopt a ticket.
+              can-transition  Check whether a ticket can move to a state.
+              claim-ticket  Claim a single ticket in a state.
+              count         Count tickets in a state.
+              describe      Describe a backend's states and transitions.
+              discard       Discard a ticket.
+              get-state     Get a ticket's current state.
+              prioritize    Move a ticket to a new priority.
+              pull          Pull waiting tickets into open slots.
+              release       Release a ticket's claim.
+              transition    Move a ticket to a wait state.
+            """),
+    }
+    # WHEN
+    result = runner.invoke(cli, ["--help"])
+    # THEN
+    actual: Outcome = {
+        "exit_code": result.exit_code,
+        "help_text": normalize_help(result.output),
+    }
+    assert expected == actual

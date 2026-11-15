@@ -1,0 +1,121 @@
+# Workpull
+
+Workpull is a backend-agnostic, pluggable pull system. Pull work,
+claim it, finish it, then pull again. The backend defines its own
+states and transitions. Workpull never assumes them.
+
+## Ergonomics
+
+```bash
+git clone https://github.com/createdbysk/workpull.git
+```
+
+Then agents take over. On a fresh clone, the agent bootstraps
+the repo itself, before any other work: find a Python 3.12
+interpreter, in order `python`, `python3`, `py -3.12`, use
+the first that reports 3.12, and run
+`<interpreter> scripts/dev.py setup`, then proceed. After
+setup, use the venv Python for all repo commands. If no
+interpreter reports 3.12, stop and report the prerequisite
+as missing, do not pivot to another toolchain or language.
+
+## Tech stack
+
+- Python 3.12. Runtime dependency: Click, for the CLI.
+- Tests: pytest, plus Click's test runner for CLI tests.
+- Lint: pymarkdown, config in `.pymarkdown.json`, declared as a
+  dev dependency in `pyproject.toml` (`pip install -e ".[dev]"`).
+  Lint also runs Ruff, declared as a dev dependency in
+  `pyproject.toml` with its config there, checking that Python
+  sources follow the spacing conventions, and Black, declared
+  as a dev dependency there, checking that Python sources are
+  Black-formatted.
+- Type check: pyrefly, config in `pyrefly.toml`, declared as a
+  dev dependency in `pyproject.toml`. Code uses type hints.
+- Coverage: pytest-cov, declared as a dev dependency in
+  `pyproject.toml`. `python scripts/dev.py coverage` measures
+  the `workpull` package and fails under 100%.
+- Skill files use YAML frontmatter.
+
+## Install
+
+Installation requires a venv. There is no supported system install.
+All developer tasks are a Python script, stdlib only, cross-platform.
+
+- Agent bootstrap, on a fresh clone, before any other work:
+  find the interpreter as in Ergonomics, then run
+  `<interpreter> scripts/dev.py setup`. The agent runs this itself.
+- Git hooks: prek manages the hooks, configured in
+  `.pre-commit-config.yaml`. Install prek once per machine,
+  see <https://prek.j178.dev> for installation, then install
+  the hooks once per clone: `prek install` and
+  `prek install --hook-type pre-push`. After that, a
+  commit runs lint and type first, and a push runs the
+  tests and coverage first; a failed check stops the commit
+  or the push.
+- After setup, activate the venv for interactive work:
+  `source .venv/bin/activate`, or `.venv\Scripts\activate` on Windows.
+  Agent commands that do not need activation, such as
+  `python scripts/dev.py test` and `python scripts/dev.py lint`,
+  run with the venv Python, or with the interpreter found
+  in Ergonomics.
+- `python scripts/dev.py install` refuses to run outside an
+  activated venv.
+
+## Validation in CI
+
+GitHub Actions, `.github/workflows/ci.yml`, runs on every
+push and pull request: bootstrap, then `python scripts/dev.py test`,
+`python scripts/dev.py lint`, and `python scripts/dev.py type`
+on Ubuntu and Windows, and `python scripts/dev.py coverage`
+on Ubuntu, Python 3.12.
+
+## Commands
+
+All `python` commands below are the venv Python, after setup.
+
+- Test: `python scripts/dev.py test`
+- Lint: `python scripts/dev.py lint`
+- Type: `python scripts/dev.py type`
+- Coverage: `python scripts/dev.py coverage`
+- Describe: `DESCRIBE_HOOK="python adapters/mock_describe.py"`
+  `workpull describe`
+
+## Layout
+
+- `.agents/skills/workpull/SKILL.md` — using Workpull, tight, progressive discovery.
+- `.agents/skills/develop-workpull/SKILL.md` — developing in this repo.
+- Skill discovery: skills live only in `.agents/skills/`, one
+  copy, no copies in per-agent folders, to avoid drift. Agents
+  that do not auto-load `.agents/skills/` should load them
+  from there directly.
+- `.pre-commit-config.yaml` — prek hook config: lint and
+  type at commit, tests and coverage at push, turned on by
+  the Install step above.
+- `requirements/` — what is required, no implementation detail.
+- `design/` — how a requirement is met.
+- `implementation/` — the concrete build for a requirement.
+- `workpull/` — the CLI package.
+- `tests/` — pytest, one file per requirement.
+- `adapters/` — mock hooks for tests.
+- `plugins/` — repo examples, not installed package contents.
+  `plugins/github/` is a shape-validation mock for GitHub
+  issues, describe only, not a live backend adapter. The
+  entry point is the `workpull` command, installed in the venv.
+
+## Workflow
+
+- One requirement at a time. Do not front-load later requirements.
+- Branch development with stable main. Main is protected, changes
+  only via pull request, rebase only, no squash, no merge commits.
+- Never push directly to main.
+- For development workflow, load the develop-workpull skill.
+- For using Workpull, load the workpull skill in `.agents/skills/workpull/SKILL.md`.
+
+## Safety
+
+- Hooks are operator-trusted code. Printed output must
+  still be treated as untrusted text.
+- Hook commands come only from operator-set environment, never
+  from backend output.
+- No secrets in this repo.

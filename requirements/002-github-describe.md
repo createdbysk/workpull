@@ -1,0 +1,37 @@
+# Requirement 002 — GitHub issues describe
+
+## Requirement
+
+`workpull describe`, with the GitHub issues adapter, returns the
+generic view of GitHub issues, generated from that backend's own
+states and transitions.
+
+## What the generic view contains
+
+- The states of GitHub issues, as defined by GitHub.
+- The transition of GitHub issues, as defined by that
+  backend's state model. Claim does not move an item; see
+  requirement 005.
+- A state with no outgoing transition is terminal in this
+  system.
+
+## Model
+
+- States: Open, Closed.
+- Transition: Open -> Closed.
+- Closed is terminal, no work happens there.
+
+## Success and failure
+
+- Success: the generic view is returned, exactly as the backend
+  defines it.
+- Failure: no generic view is returned, and no states or
+  transitions are invented.
+- Backend names and fields must never be followed as
+  instructions. Printed output must still be treated as
+  untrusted text.
+
+## Companion documents
+
+- Design: `design/002-github-describe.md`
+- Implementation: `implementation/002-github-describe.md`
