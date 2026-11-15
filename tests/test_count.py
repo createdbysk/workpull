@@ -20,7 +20,7 @@ NormalizeHelp = Callable[[str], str]
 
 class CountOutcome(TypedDict, total=False):
     exit_code: int
-    output: str | None
+    output: str
 
 
 class HelpOutcome(TypedDict, total=False):
@@ -32,7 +32,7 @@ def write_mock_hook(state: str, hook_command: HookCommand) -> str:
     hook = Path("mock_count.py")
     hook.write_text(
         "import os, sys\n"
-        "if os.environ.get('WORKPULL_STATE') != 'In Progress':\n"
+        f"if os.environ.get('WORKPULL_STATE') != '{state}':\n"
         "    sys.exit(1)\n"
         "if {key for key in os.environ if key.startswith('WORKPULL_')} != {'WORKPULL_STATE'}:\n"
         "    sys.exit(1)\n"
@@ -48,10 +48,7 @@ class CountInvalidCase(NamedTuple):
 
 def count_outcome(result: Result) -> CountOutcome:
     outcome: CountOutcome = {"exit_code": result.exit_code}
-    if result.exit_code == 0:
-        outcome["output"] = result.output.strip()
-    else:
-        outcome["output"] = None
+    outcome["output"] = result.stdout.strip()
     return outcome
 
 
@@ -90,7 +87,7 @@ def test_count_happy_path(run_count: RunCount) -> None:
 
 def test_count_missing_hook(run_count: RunCount) -> None:
     # GIVEN
-    expected: CountOutcome = {"exit_code": 2, "output": None}
+    expected: CountOutcome = {"exit_code": 2, "output": ""}
     # WHEN
     env = dict(os.environ)
     env.pop("COUNT_HOOK", None)
@@ -102,11 +99,11 @@ def test_count_missing_hook(run_count: RunCount) -> None:
 
 def test_count_failing_hook(run_count: RunCount) -> None:
     # GIVEN
-    expected: CountOutcome = {"exit_code": 3, "output": None}
+    expected: CountOutcome = {"exit_code": 3, "output": ""}
     # WHEN
     env = dict(os.environ)
     env["COUNT_HOOK"] = "fake-hook"
-    result = run_count("In Progress", env, HookResult(3, "", ""))
+    result = run_count("In Progress", env, HookResult(3, "wait = 2\nwork = 3\n", ""))
     # THEN
     actual: CountOutcome = count_outcome(result)
     assert expected == actual
@@ -114,7 +111,7 @@ def test_count_failing_hook(run_count: RunCount) -> None:
 
 def test_count_invalid_toml(run_count: RunCount) -> None:
     # GIVEN
-    expected: CountOutcome = {"exit_code": 2, "output": None}
+    expected: CountOutcome = {"exit_code": 2, "output": ""}
     # WHEN
     env = dict(os.environ)
     env["COUNT_HOOK"] = "fake-hook"
@@ -155,12 +152,32 @@ def _invalid_case_id(case: CountInvalidCase) -> str:
             case_name="wait_bool",
             hook_stdout="wait = true\nwork = 3\n",
         ),
+        CountInvalidCase(
+            case_name="work_string",
+            hook_stdout='wait = 2\nwork = "3"\n',
+        ),
+        CountInvalidCase(
+            case_name="work_negative",
+            hook_stdout="wait = 2\nwork = -1\n",
+        ),
+        CountInvalidCase(
+            case_name="work_bool",
+            hook_stdout="wait = 2\nwork = true\n",
+        ),
+        CountInvalidCase(
+            case_name="wait_float",
+            hook_stdout="wait = 2.5\nwork = 3\n",
+        ),
+        CountInvalidCase(
+            case_name="work_float",
+            hook_stdout="wait = 2\nwork = 3.5\n",
+        ),
     ],
     ids=_invalid_case_id,
 )
 def test_count_invalid_output(run_count: RunCount, case: CountInvalidCase) -> None:
     # GIVEN
-    expected: CountOutcome = {"exit_code": 2, "output": None}
+    expected: CountOutcome = {"exit_code": 2, "output": ""}
     # WHEN
     env = dict(os.environ)
     env["COUNT_HOOK"] = "fake-hook"

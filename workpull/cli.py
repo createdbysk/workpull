@@ -297,19 +297,17 @@ def discard(ticket: str, token: str, run_hook_fn: RunHook) -> None:
     click.echo(ticket_id)
 
 
-def validate_count(counts: object) -> str | None:
+def validate_count(counts: dict[str, Any]) -> str | None:
     """Validate a parsed count document. Returns an error string or None.
 
     Contract, for hook authors: exactly wait and work,
     each a non-negative integer.
+    The document is always a dict: tomllib.loads returns a
+    dict for every input, so no non-dict check is needed.
     """
-    if (
-        not isinstance(counts, dict)
-        or set(counts) != {"wait", "work"}
-        or any(
-            isinstance(value, bool) or not isinstance(value, int) or value < 0
-            for value in counts.values()
-        )
+    if set(counts) != {"wait", "work"} or any(
+        isinstance(value, bool) or not isinstance(value, int) or value < 0
+        for value in counts.values()
     ):
         return "invalid count output: expected wait and work counts"
     return None
