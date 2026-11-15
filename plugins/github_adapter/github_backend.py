@@ -13,6 +13,9 @@ selects the file-backed store the tests use, and
 GITHUB_REPOSITORY selects the live REST store, with
 the credential in GITHUB_TOKEN. No test uses the live
 store and no secret is stored in this repo.
+WORKPULL_GITHUB_CONFIG_BRANCH names the branch the
+live store reads workpull.toml from; when it is not
+set, the file is read from the default branch.
 
 Per-ticket data lives on the issue itself: the state
 is the workpull: label, and the priority key, the
@@ -178,11 +181,13 @@ class HttpGithubStore(GithubStore):
         token: str,
         api_url: str,
         opener: Callable[[urllib.request.Request], Any],
+        config_branch: str | None,
     ) -> None:
         self._repo = repo
         self._token = token
         self._api_url = api_url
         self._opener = opener
+        self._config_branch = config_branch
 
     def _request(self, method: str, path: str, payload: dict[str, Any] | None) -> Any:
         data = json.dumps(payload).encode() if payload is not None else None
@@ -206,9 +211,10 @@ class HttpGithubStore(GithubStore):
 
     @override
     def read_config(self) -> str:
-        payload = self._request(
-            "GET", f"/repos/{self._repo}/contents/workpull.toml", None
-        )
+        path = f"/repos/{self._repo}/contents/workpull.toml"
+        if self._config_branch is not None:
+            path = f"{path}?ref={self._config_branch}"
+        payload = self._request("GET", path, None)
         if not isinstance(payload, dict):
             raise AdapterFailure("unexpected GitHub config")
         encoded = _json_str(payload.get("content"))
@@ -259,6 +265,7 @@ def store_from_env(env: Mapping[str, str]) -> GithubStore:
             token=env.get("GITHUB_TOKEN", ""),
             api_url=env.get("GITHUB_API_URL", "https://api.github.com"),
             opener=urllib.request.urlopen,
+            config_branch=env.get("WORKPULL_GITHUB_CONFIG_BRANCH"),
         )
     raise AdapterFailure("no GitHub store is configured")
 

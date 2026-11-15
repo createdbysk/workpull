@@ -145,6 +145,10 @@ and the labels are its per-ticket record.
   every operator and every host sees the same
   states, transitions, and limits, which the
   distributed claim design requires (design 015).
+- The operator names the branch the file is read
+  from with `WORKPULL_GITHUB_CONFIG_BRANCH`. When
+  the option is not set, the file is read from the
+  repository's default branch.
 - The adapter applies state labels by name; GitHub
   creates a label that does not exist yet when it is
   first applied to an issue, so setup needs no

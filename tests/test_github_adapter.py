@@ -694,6 +694,7 @@ def make_http_store(
         token="test-token",
         api_url="https://api.example.test",
         opener=transport,
+        config_branch=None,
     )
     return store, transport
 
@@ -727,6 +728,66 @@ def test_http_read_config_decodes_base64_contents() -> None:
     )
     assert request.get_header("Authorization") == "Bearer test-token"
     assert request.get_header("Accept") == "application/vnd.github+json"
+
+
+class ConfigBranchCase(NamedTuple):
+    case_name: str
+    config_branch: str | None
+    expected_url: str
+
+
+def _config_branch_case_id(case: ConfigBranchCase) -> str:
+    return case.case_name
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        ConfigBranchCase(
+            case_name="option_unset_reads_default_branch",
+            config_branch=None,
+            expected_url=(
+                "https://api.example.test/repos/owner/repo/contents/workpull.toml"
+            ),
+        ),
+        ConfigBranchCase(
+            case_name="option_set_reads_named_branch",
+            config_branch="workpull-settings",
+            expected_url=(
+                "https://api.example.test/repos/owner/repo/contents/workpull.toml"
+                "?ref=workpull-settings"
+            ),
+        ),
+    ],
+    ids=_config_branch_case_id,
+)
+def test_read_config_requests_the_config_branch_named_by_the_option(
+    case: ConfigBranchCase, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # GIVEN
+    encoded = base64.b64encode(CONFIG.encode()).decode()
+
+    def handler(request: urllib.request.Request) -> bytes:
+        return json.dumps({"content": encoded}).encode()
+
+    transport = FakeHttpTransport(handler)
+    monkeypatch.setattr(urllib.request, "urlopen", transport)
+    env = {
+        "GITHUB_REPOSITORY": "owner/repo",
+        "GITHUB_TOKEN": "test-token",
+        "GITHUB_API_URL": "https://api.example.test",
+    }
+    if case.config_branch is not None:
+        env["WORKPULL_GITHUB_CONFIG_BRANCH"] = case.config_branch
+    store = backend.store_from_env(env)
+    # WHEN
+    actual = store.read_config()
+    # THEN
+    assert actual == CONFIG
+    assert len(transport.requests) == 1
+    request = transport.requests[0]
+    assert request.get_method() == "GET"
+    assert request.full_url == case.expected_url
 
 
 def test_http_get_issue_parses_issue_labels_and_body() -> None:

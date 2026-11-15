@@ -25,6 +25,10 @@ the hooks inherit:
   record lives in the body.
 - `GITHUB_API_URL`: optional, defaults to
   `https://api.github.com`.
+- `WORKPULL_GITHUB_CONFIG_BRANCH`: optional, the
+  branch `workpull.toml` is read from. When it is
+  not set, the file is read from the repository's
+  default branch.
 
 Point each Workpull hook at the matching script,
 replacing `<python>` with the Python 3.12 interpreter
