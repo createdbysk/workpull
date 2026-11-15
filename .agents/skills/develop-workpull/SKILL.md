@@ -60,7 +60,7 @@ Do not front-load later requirements.
    then run `prek install` and
    `prek install --hook-type pre-push`, so commits in this
    clone run lint and type first and pushes run the tests
-   first.
+   and coverage first.
 1. Requirement: write `requirements/<nnn>-<name>.md`, what only.
    Do not read design or implementation documents yet.
 2. Design: write `design/<nnn>-<name>.md`, how only.
@@ -74,6 +74,7 @@ Do not front-load later requirements.
 7. Lint, test, and coverage, with the venv Python from step 0:
    - `python scripts/dev.py test`
    - `python scripts/dev.py lint`
+   - `python scripts/dev.py type`
    - `python scripts/dev.py coverage`
 8. Push to a branch, never to main. Main is protected, pull
    request required, rebase only, no squash, no merge commits.

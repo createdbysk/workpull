@@ -51,7 +51,8 @@ All developer tasks are a Python script, stdlib only, cross-platform.
   the hooks once per clone: `prek install` and
   `prek install --hook-type pre-push`. After that, a
   commit runs lint and type first, and a push runs the
-  tests first; a failed check stops the commit or the push.
+  tests and coverage first; a failed check stops the commit
+  or the push.
 - After setup, activate the venv for interactive work:
   `source .venv/bin/activate`, or `.venv\Scripts\activate` on Windows.
   Agent commands that do not need activation, such as
@@ -64,8 +65,10 @@ All developer tasks are a Python script, stdlib only, cross-platform.
 ## Validation in CI
 
 GitHub Actions, `.github/workflows/ci.yml`, runs on every
-push and pull request: bootstrap, then `python scripts/dev.py test`
-and `python scripts/dev.py lint`, on Ubuntu and Windows, Python 3.12.
+push and pull request: bootstrap, then `python scripts/dev.py test`,
+`python scripts/dev.py lint`, and `python scripts/dev.py type`
+on Ubuntu and Windows, and `python scripts/dev.py coverage`
+on Ubuntu, Python 3.12.
 
 ## Commands
 
@@ -87,8 +90,8 @@ All `python` commands below are the venv Python, after setup.
   that do not auto-load `.agents/skills/` should load them
   from there directly.
 - `.pre-commit-config.yaml` — prek hook config: lint and
-  type at commit, tests at push, turned on by the Install
-  step above.
+  type at commit, tests and coverage at push, turned on by
+  the Install step above.
 - `requirements/` — what is required, no implementation detail.
 - `design/` — how a requirement is met.
 - `implementation/` — the concrete build for a requirement.

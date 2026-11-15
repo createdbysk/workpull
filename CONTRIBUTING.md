@@ -8,6 +8,7 @@ Before a pull request:
 
 ```bash
 python scripts/dev.py test
+python scripts/dev.py coverage
 python scripts/dev.py lint
 python scripts/dev.py type
 ```
