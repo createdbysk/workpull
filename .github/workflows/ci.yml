@@ -25,3 +25,16 @@ jobs:
         run: python scripts/dev.py lint
       - name: Type check
         run: python scripts/dev.py type
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bootstrap venv and dev deps
+        run: python scripts/dev.py setup
+      - name: Coverage
+        run: python scripts/dev.py coverage
