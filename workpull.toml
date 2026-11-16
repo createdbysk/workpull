@@ -1,12 +1,14 @@
-states = ["Backlog", "In Progress", "Review", "Done"]
+states = ["Options", "Backlog", "In Progress", "Review", "Done"]
 
 [transitions]
+Options = "Backlog"
 Backlog = "In Progress"
 "In Progress" = "Review"
 Review = "Done"
 
 [wip_limits]
-Backlog = { work = 2, wait = inf }
+Options = { work = inf, wait = inf }
+Backlog = { work = 5, wait = 3 }
 "In Progress" = { work = 2, wait = 2 }
 Review = { work = 2, wait = 2 }
 Done = { work = inf, wait = 1 }
